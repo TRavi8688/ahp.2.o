@@ -15,7 +15,7 @@ export default function RegistrationSuccessScreen({ navigation, route }) {
     const onShare = async () => {
         try {
             await Share.share({
-                message: `My ELEX.AI Health Passport ID is ${ahp_id}. Scan this to view my medical history.`,
+                message: `My Mulajna Health Passport ID is ${ahp_id}. Scan this to view my medical history.`,
             });
         } catch (error) {
             console.error(error);
@@ -28,7 +28,7 @@ export default function RegistrationSuccessScreen({ navigation, route }) {
                 <View style={styles.successIcon}>
                     <Ionicons name="checkmark-circle" size={80} color="#fff" />
                 </View>
-                <Text style={styles.welcomeText}>Welcome to ELEX.AI,</Text>
+                <Text style={styles.welcomeText}>Welcome to Mulajna,</Text>
                 <Text style={styles.nameText}>{fullName}!</Text>
                 <Text style={styles.subtitle}>Your AI Health Passport is ready.</Text>
             </LinearGradient>

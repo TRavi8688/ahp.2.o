@@ -5,9 +5,9 @@ import { View, Text } from 'react-native';
 
 // Import Screens
 import HomeScreen from '../screens/HomeScreen';
-import VitalsScreen from '../screens/VitalsScreen';
+import MyRecordsScreen from '../screens/MyRecordsScreen';
 import ChittiAiScreen from '../screens/ChittiAiScreen';
-import MedsScreen from '../screens/MedsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -20,37 +20,41 @@ export default function MainTabs() {
 
                     if (route.name === 'Home') {
                         iconName = focused ? 'home' : 'home-outline';
-                    } else if (route.name === 'Vitals') {
-                        iconName = focused ? 'pulse' : 'pulse-outline';
+                    } else if (route.name === 'Records') {
+                        iconName = focused ? 'medical' : 'medical-outline';
                     } else if (route.name === 'Chitti') {
                         iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
-                    } else if (route.name === 'Meds') {
-                        iconName = focused ? 'medkit' : 'medkit-outline';
+                    } else if (route.name === 'Settings') {
+                        iconName = focused ? 'settings' : 'settings-outline';
                     }
 
                     return <Ionicons name={iconName} size={size} color={color} />;
                 },
-                tabBarActiveTintColor: '#FFFFFF',
-                tabBarInactiveTintColor: '#555555',
-                tabBarLabelStyle: {
-                    fontFamily: 'SpaceMono_400Regular',
-                    fontSize: 10,
-                    letterSpacing: 1,
-                },
+                tabBarActiveTintColor: '#6366F1',
+                tabBarInactiveTintColor: '#94A3B8',
                 tabBarStyle: {
-                    backgroundColor: '#080808',
                     borderTopWidth: 1,
-                    borderTopColor: '#1A1A1A',
-                    height: 80,
-                    paddingBottom: 20,
+                    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+                    backgroundColor: '#050810',
+                    elevation: 0,
+                    height: 60,
+                    paddingBottom: 5,
                 },
-                headerShown: false,
+                headerStyle: {
+                    backgroundColor: '#050810',
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+                },
+                headerTintColor: '#FFFFFF',
+                headerTitleStyle: {
+                    fontWeight: 'bold',
+                },
             })}
         >
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Vitals" component={VitalsScreen} />
-            <Tab.Screen name="Chitti" component={ChittiAiScreen} />
-            <Tab.Screen name="Meds" component={MedsScreen} />
+            <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Unified Profile' }} />
+            <Tab.Screen name="Records" component={MyRecordsScreen} options={{ title: 'My Records' }} />
+            <Tab.Screen name="Chitti" component={ChittiAiScreen} options={{ title: 'Chitti AI' }} />
+            <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
         </Tab.Navigator>
     );
 }

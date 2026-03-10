@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image, Modal, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Theme, GlobalStyles } from '../theme';
-import { API_BASE_URL } from '../api';
+import { useSocket } from '../contexts/SocketContext';
 
-const { width } = Dimensions.get('window');
+import { API_BASE_URL } from '../api';
 
 export default function HomeScreen({ navigation }) {
     const [profile, setProfile] = useState(null);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const { lastMessage } = useSocket();
+    const [showConsent, setShowConsent] = useState(false);
+    const [consentData, setConsentData] = useState(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
     const fetchData = async () => {
         try {
@@ -41,302 +45,747 @@ export default function HomeScreen({ navigation }) {
         fetchData();
     }, []);
 
+    useEffect(() => {
+        if (lastMessage?.type === 'patient_update') {
+            console.log('Real-time sync triggered by socket:', lastMessage);
+            fetchData();
+        }
+        if (lastMessage?.type === 'consent_request') {
+            setConsentData(lastMessage);
+            setShowConsent(true);
+        }
+    }, [lastMessage]);
+
+    const handleConsentAction = async (action) => {
+        if (!consentData) return;
+        setActionLoading(true);
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const endpoint = action === 'approve'
+                ? `${API_BASE_URL}/patient/approve-access/${consentData.access_id}`
+                : `${API_BASE_URL}/patient/revoke-access/${consentData.access_id}`;
+
+            await axios.post(endpoint, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setShowConsent(false);
+            Alert.alert("Success", `Access ${action === 'approve' ? 'granted' : 'rejected'} successfully.`);
+        } catch (error) {
+            console.error('Consent action error:', error);
+            Alert.alert("Error", "Failed to process consent request.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const onRefresh = () => {
         setRefreshing(true);
         fetchData();
     };
 
-    const statusDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase();
-
-    // Metric Item Component
-    const MetricItem = ({ label, value, unit, status, statusColor, isLastRow }) => (
-        <View style={[styles.metricCell, isLastRow && { borderBottomWidth: 0 }]}>
-            <View style={styles.metricLabelRow}>
-                <Text style={styles.metricLabel}>{label}</Text>
-                {status && (
-                    <Text style={[styles.metricStatus, { color: Theme.colors[statusColor] || statusColor }]}>
-                        {status === 'Elevated' ? '↑' : '✓'} {status.toUpperCase()}
-                    </Text>
-                )}
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: '#4c1d95', fontSize: 16 }}>Loading Clinical Snapshot...</Text>
             </View>
-            <Text style={styles.metricValue}>{value}</Text>
-            <Text style={styles.metricUnit}>{unit}</Text>
-        </View>
-    );
+        );
+    }
 
     return (
-        <View style={GlobalStyles.screen}>
-            {/* Status Bar Info (Custom Header) */}
-            <View style={styles.statusBarInfo}>
-                <Text style={styles.statusBarText}>{statusDate}</Text>
-                <Text style={styles.statusBarText}>BATT 98%</Text>
-            </View>
-
-            <ScrollView
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />}
-                contentContainerStyle={styles.scrollContent}
-            >
-                {/* Top Section */}
-                <View style={styles.topSection}>
-                    <View>
-                        <Text style={styles.greeting}>GOOD MORNING</Text>
-                        <Text style={styles.userName}>{profile?.full_name || 'Ravi Sharma'}</Text>
-                    </View>
-                    <View style={styles.avatarCircle}>
-                        <Text style={styles.avatarText}>RS</Text>
-                    </View>
-                </View>
-
-                {/* THE SCORE - Hero Element */}
-                <View style={styles.scoreHero}>
-                    <View style={styles.scoreRow}>
-                        <Text style={styles.giantScore}>78</Text>
-                        <View style={styles.scoreLabelStack}>
-                            <Text style={styles.scoreLabel}>HEALTH SCORE</Text>
-                            <Text style={styles.scoreCondition}>Good Condition</Text>
+        <ScrollView
+            style={styles.container}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4c1d95" />}
+        >
+            {/* 1. Patient Header */}
+            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
+                <View style={styles.headerContent}>
+                    <View style={styles.profileRow}>
+                        <View style={styles.avatar}>
+                            <Ionicons name="person" size={30} color="#7c3aed" />
+                        </View>
+                        <View style={styles.headerText}>
+                            <Text style={styles.userName}>{summary?.patient_name || profile?.full_name || 'Patient'}</Text>
+                            <Text style={styles.patientSub}>
+                                Age: {summary?.age || profile?.age || 'N/A'} | Blood Group: {summary?.blood_group || profile?.blood_group || 'N/A'}
+                            </Text>
+                            <View style={styles.idBadge}>
+                                <Text style={styles.idText}>ID: {summary?.ahp_id || profile?.ahp_id}</Text>
+                            </View>
                         </View>
                     </View>
-                    {/* Progress Bar */}
-                    <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: '78%' }]} />
-                    </View>
+                    <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+                        <Ionicons name="notifications-outline" size={28} color="#fff" />
+                    </TouchableOpacity>
                 </View>
 
-                {/* ALERT BOX */}
-                <TouchableOpacity style={styles.alertBox}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.alertTitle}>BP ELEVATED — REVIEW NOW</Text>
-                        <Text style={styles.alertSub}>3 CONSECUTIVE HIGH READINGS · TAP TO ACT</Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
 
-                <View style={styles.grayDivider} />
-
-                {/* 4-Metric Grid */}
-                <View style={styles.metricGrid}>
-                    <View style={styles.metricRow}>
-                        <MetricItem
-                            label="SYSTOLIC/DIASTOLIC"
-                            value="128/84"
-                            unit="mmHg"
-                            status="Elevated"
-                            statusColor="warning"
-                        />
-                        <View style={styles.verticalDivider} />
-                        <MetricItem
-                            label="HEART RATE"
-                            value="76"
-                            unit="bpm"
-                            status="Normal"
-                            statusColor="positive"
-                        />
+                {/* 1b. AI Health Summary */}
+                <View style={styles.summaryCard}>
+                    <View style={styles.summaryBadge}>
+                        <Ionicons name="sparkles" size={14} color="#fff" />
+                        <Text style={styles.summaryBadgeText}>AI HEALTH SUMMARY</Text>
                     </View>
-                    <View style={styles.horizontalDivider} />
-                    <View style={styles.metricRow}>
-                        <MetricItem
-                            label="BLOOD OXYGEN"
-                            value="96%"
-                            unit="SpO₂"
-                            status="Normal"
-                            statusColor="positive"
-                            isLastRow
-                        />
-                        <View style={styles.verticalDivider} />
-                        <MetricItem
-                            label="TEMPERATURE"
-                            value="98.4°"
-                            unit="Fahrenheit"
-                            status="Normal"
-                            statusColor="positive"
-                            isLastRow
-                        />
+                    <Text style={styles.summaryText} numberOfLines={4}>
+                        {summary?.summary || 'No clinical summary available. Upload a medical record to allow Chitti AI to analyze your health.'}
+                    </Text>
+                    <Text style={styles.lastUpdate}>Last Updated: {summary?.last_update || 'Today'}</Text>
+                </View>
+            </LinearGradient>
+
+            {/* 2. Health Score Card */}
+            {summary?.health_score != null && (
+                <View style={styles.scoreSection}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Health Score</Text>
+                        <Text style={styles.scoreValue}>{summary.health_score}/100</Text>
+                    </View>
+                    <View style={styles.scoreBarBg}>
+                        <View style={[styles.scoreBarFill, { width: `${summary.health_score}%` }]} />
+                    </View>
+                    <View style={styles.factorTags}>
+                        {summary.health_score_factors?.map((f, i) => (
+                            <View key={i} style={styles.factorTag}>
+                                <Ionicons name="checkmark-circle" size={12} color="#10b981" />
+                                <Text style={styles.factorText}>{f}</Text>
+                            </View>
+                        ))}
                     </View>
                 </View>
+            )}
 
-                {/* AI Assistant CTA (Page 7 Link) */}
-                <TouchableOpacity
-                    style={styles.aiLink}
-                    onPress={() => navigation.navigate('Chitti')}
-                >
-                    <Text style={styles.aiLinkText}>ASK CHITTI AI ANYTHING →</Text>
-                </TouchableOpacity>
+            {/* 3. Recovery Timeline (Visual Chart) */}
+            {summary?.recovery_timeline?.length > 0 && (
+                <View style={styles.chartSection}>
+                    <Text style={styles.sectionTitle}>Health Progress Timeline</Text>
+                    <View style={styles.timelineChart}>
+                        {Array.isArray(summary.recovery_timeline) && summary.recovery_timeline.map((point, i) => (
+                            <View key={i} style={styles.timelineBarGroup}>
+                                <Text style={styles.timelineYear}>{point.year}</Text>
+                                <View style={styles.barContainer}>
+                                    <View style={[styles.barFill, { height: point.level * 1.5 }]} />
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+            )}
 
-                <View style={{ height: 100 }} />
-            </ScrollView>
-        </View>
+            {/* 4. Condition Progress Tracker */}
+            {Object.keys(summary?.condition_progress || {}).length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Condition Progress</Text>
+                    {Object.entries(summary.condition_progress).map(([name, trends], i) => (
+                        <View key={i} style={styles.conditionCard}>
+                            <View style={styles.conditionHeader}>
+                                <Text style={styles.conditionName}>{name}</Text>
+                                <Ionicons name="trending-down" size={20} color="#10b981" />
+                            </View>
+                            <View style={styles.trendRow}>
+                                {Array.isArray(trends) && trends.map((t, idx) => (
+                                    <View key={idx} style={styles.trendItem}>
+                                        <Text style={styles.trendVal}>{t.value}</Text>
+                                        <Text style={styles.trendDate}>{t.date}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* 5. Medication Impact */}
+            {summary?.medication_impact?.length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Medication Impact</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.impactScroll}>
+                        {Array.isArray(summary.medication_impact) && summary.medication_impact.map((med, i) => (
+                            <View key={i} style={styles.impactCard}>
+                                <Ionicons name="medkit" size={24} color="#4c1d95" />
+                                <Text style={styles.impactMedName}>{med.name}</Text>
+                                <Text style={styles.impactImprovement}>{med.improvement}</Text>
+                                <Text style={styles.impactLabel}>Improvement</Text>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* 7. Health Alerts */}
+            {summary?.alerts?.length > 0 && (
+                <View style={styles.alertSection}>
+                    {Array.isArray(summary.alerts) && summary.alerts.map((alert, i) => (
+                        <View key={i} style={styles.alertBox}>
+                            <Ionicons name="warning" size={20} color="#b91c1c" />
+                            <Text style={styles.alertText}>{alert}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* 9. Reports Overview */}
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Record History</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('Records')}>
+                        <Text style={styles.viewAll}>View All</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {profile?.recent_records?.length > 0 ? (
+                    profile.recent_records.slice(0, 3).map((record, index) => (
+                        <TouchableOpacity key={index} style={styles.activityCard} onPress={() => navigation.navigate('Records')}>
+                            <View style={styles.activityIcon}>
+                                <Ionicons name="document-text" size={20} color="#4c1d95" />
+                            </View>
+                            <View style={styles.activityInfo}>
+                                <Text style={styles.activityTitle}>{record.title || 'Medical Record'}</Text>
+                                <Text style={styles.activityDate}>{new Date(record.created_at).toLocaleDateString()}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                        </TouchableOpacity>
+                    ))
+                ) : (
+                    <TouchableOpacity style={styles.uploadPrompt} onPress={() => navigation.navigate('Records')}>
+                        <Ionicons name="cloud-upload-outline" size={40} color="#4c1d95" />
+                        <Text style={styles.uploadText}>No records found. Upload now.</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* 10. AI Assistant CTA */}
+            <TouchableOpacity
+                style={styles.aiAssistantCard}
+                onPress={() => navigation.navigate('Chitti')}
+            >
+                <LinearGradient colors={['#1e1b4b', '#4c1d95']} style={styles.aiGradient}>
+                    <View style={styles.aiContent}>
+                        <View style={styles.aiTextGroup}>
+                            <Text style={styles.aiTitle}>Chat with Chitti AI</Text>
+                            <Text style={styles.aiSubtitle}>Ask anything about your health or reports</Text>
+                        </View>
+                        <View style={styles.aiIconCircle}>
+                            <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+                        </View>
+                    </View>
+                </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={{ height: 60 }} />
+
+            {/* 11. Consent Modal (Instant Popup) */}
+            <Modal
+                visible={showConsent}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowConsent(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalIconBox}>
+                            <Ionicons name="shield-checkmark" size={40} color="#4c1d95" />
+                        </View>
+                        <Text style={styles.modalTitle}>Access Request</Text>
+                        <Text style={styles.modalMsg}>
+                            <Text style={{ fontWeight: 'bold' }}>Dr. {consentData?.doctor_name}</Text> is requesting to view your medical records for clinical consultation.
+                        </Text>
+
+                        <View style={styles.modalInfoBox}>
+                            <Ionicons name="information-circle-outline" size={16} color="#64748b" />
+                            <Text style={styles.modalInfoText}>This access will be logged in your history.</Text>
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.grantBtn]}
+                                onPress={() => handleConsentAction('approve')}
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={styles.grantBtnText}>Grant Access</Text>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.rejectBtn]}
+                                onPress={() => handleConsentAction('reject')}
+                                disabled={actionLoading}
+                            >
+                                <Text style={styles.rejectBtnText}>Reject</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    statusBarInfo: {
+    container: {
+        flex: 1,
+        backgroundColor: '#f8fafc',
+    },
+    header: {
+        paddingTop: 60,
+        paddingHorizontal: 20,
+        paddingBottom: 30,
+        borderBottomLeftRadius: 36,
+        borderBottomRightRadius: 36,
+    },
+    headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingTop: 50,
-        paddingHorizontal: 20,
-        paddingBottom: 10,
+        alignItems: 'flex-start',
+        marginBottom: 25,
     },
-    statusBarText: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
+    profileRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    avatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    userName: {
+        color: '#fff',
+        fontSize: 22,
+        fontWeight: 'bold',
+    },
+    patientSub: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 13,
+        marginTop: 2,
+    },
+    idBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+        marginTop: 6,
+        alignSelf: 'flex-start',
+    },
+    idText: {
+        color: '#fff',
         fontSize: 10,
+        fontWeight: 'bold',
     },
-    scrollContent: {
-        paddingHorizontal: 20,
+    summaryCard: {
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: 24,
+        padding: 20,
+        backdropFilter: 'blur(10px)',
     },
-    topSection: {
+    summaryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#7c3aed',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginBottom: 12,
+    },
+    summaryBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '900',
+        marginLeft: 4,
+        letterSpacing: 0.5,
+    },
+    summaryText: {
+        color: '#fff',
+        fontSize: 14,
+        lineHeight: 22,
+        opacity: 0.95,
+    },
+    lastUpdate: {
+        color: 'rgba(255,255,255,0.5)',
+        fontSize: 10,
+        marginTop: 12,
+    },
+    section: {
+        padding: 20,
+    },
+    scoreSection: {
+        backgroundColor: '#fff',
+        margin: 20,
+        padding: 20,
+        borderRadius: 24,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+    },
+    sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 20,
-        marginBottom: 40,
+        marginBottom: 15,
     },
-    greeting: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
-        fontSize: 10,
-        letterSpacing: 1,
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#1e293b',
     },
-    userName: {
-        fontFamily: Theme.fonts.heading,
-        color: Theme.colors.primary,
+    scoreValue: {
         fontSize: 24,
+        fontWeight: '900',
+        color: '#4c1d95',
     },
-    avatarCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+    scoreBarBg: {
+        height: 10,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 5,
+        overflow: 'hidden',
+    },
+    scoreBarFill: {
+        height: '100%',
+        backgroundColor: '#4c1d95',
+        borderRadius: 5,
+    },
+    factorTags: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 15,
+    },
+    factorTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0fdf4',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginRight: 8,
+        marginBottom: 8,
+    },
+    factorText: {
+        fontSize: 11,
+        color: '#166534',
+        marginLeft: 4,
+    },
+    chartSection: {
+        backgroundColor: '#fff',
+        padding: 20,
+        marginHorizontal: 20,
+        borderRadius: 24,
+        marginBottom: 20,
+    },
+    timelineChart: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        height: 180,
+        marginTop: 20,
+    },
+    timelineBarGroup: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    barContainer: {
+        height: 150,
+        width: 12,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 6,
+        justifyContent: 'flex-end',
+    },
+    barFill: {
+        width: '100%',
+        backgroundColor: '#7c3aed',
+        borderRadius: 6,
+    },
+    timelineYear: {
+        fontSize: 10,
+        color: '#94a3b8',
+        marginTop: 10,
+    },
+    conditionCard: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
         borderWidth: 1,
-        borderColor: Theme.colors.primary,
+        borderColor: '#f1f5f9',
+    },
+    conditionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    conditionName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#334155',
+    },
+    trendRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    trendItem: {
+        alignItems: 'center',
+    },
+    trendVal: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#1e293b',
+    },
+    trendDate: {
+        fontSize: 10,
+        color: '#94a3b8',
+    },
+    impactScroll: {
+        marginTop: 10,
+    },
+    impactCard: {
+        backgroundColor: '#fff',
+        width: 140,
+        padding: 16,
+        borderRadius: 20,
+        marginRight: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#f1f5f9',
+    },
+    impactMedName: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#64748b',
+        marginTop: 8,
+    },
+    impactImprovement: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#10b981',
+        marginVertical: 4,
+    },
+    impactLabel: {
+        fontSize: 10,
+        color: '#94a3b8',
+    },
+    alertSection: {
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    alertBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fef2f2',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#fee2e2',
+        marginBottom: 8,
+    },
+    alertText: {
+        fontSize: 13,
+        color: '#991b1b',
+        marginLeft: 10,
+        fontWeight: '600',
+    },
+    activityCard: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    activityIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: '#f5f3ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    activityInfo: {
+        flex: 1,
+    },
+    activityTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#334155',
+    },
+    activityDate: {
+        fontSize: 11,
+        color: '#94a3b8',
+    },
+    uploadPrompt: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 30,
+        alignItems: 'center',
+        borderStyle: 'dashed',
+        borderWidth: 2,
+        borderColor: '#cbd5e1',
+    },
+    uploadText: {
+        marginTop: 10,
+        color: '#64748b',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    aiAssistantCard: {
+        margin: 20,
+        borderRadius: 24,
+        overflow: 'hidden',
+        elevation: 8,
+        shadowColor: '#4c1d95',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+    },
+    aiGradient: {
+        padding: 20,
+    },
+    aiContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    aiTextGroup: {
+        flex: 1,
+        marginRight: 15,
+    },
+    aiTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    aiSubtitle: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 12,
+        marginTop: 4,
+    },
+    aiIconCircle: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    avatarText: {
-        fontFamily: Theme.fonts.headingSemi,
-        color: Theme.colors.primary,
-        fontSize: 18,
+    viewAll: {
+        color: '#4c1d95',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
-    scoreHero: {
-        marginBottom: 30,
-    },
-    scoreRow: {
+    inlineAlert: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
+        alignItems: 'center',
+        backgroundColor: '#ef4444',
+        marginHorizontal: 20,
+        marginTop: -15,
         marginBottom: 15,
-        gap: 15,
+        padding: 12,
+        borderRadius: 16,
+        gap: 10,
+        elevation: 4,
     },
-    giantScore: {
-        fontFamily: Theme.fonts.heading,
-        color: Theme.colors.primary,
-        fontSize: 80,
-        lineHeight: 80,
-    },
-    scoreLabelStack: {
-        paddingBottom: 10,
-    },
-    scoreLabel: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
-        fontSize: 10,
-        letterSpacing: 1,
-    },
-    scoreCondition: {
-        fontFamily: Theme.fonts.body,
-        color: Theme.colors.primary,
-        fontSize: 14,
-    },
-    progressTrack: {
-        height: 4,
-        backgroundColor: Theme.colors.black,
-        width: '100%',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: Theme.colors.primary,
-    },
-    alertBox: {
-        borderWidth: 1,
-        borderColor: Theme.colors.primary,
-        padding: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 20,
-    },
-    alertTitle: {
-        fontFamily: Theme.fonts.headingSemi,
-        color: Theme.colors.primary,
-        fontSize: 14,
-    },
-    alertSub: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
-        fontSize: 9,
-        marginTop: 4,
-    },
-    grayDivider: {
-        height: 1,
-        backgroundColor: '#1A1A1A',
-        width: '100%',
-        marginVertical: 40,
-    },
-    metricGrid: {
-        width: '100%',
-    },
-    metricRow: {
-        flexDirection: 'row',
-    },
-    metricCell: {
-        flex: 1,
-        paddingVertical: 15,
-    },
-    metricLabelRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 5,
-    },
-    metricLabel: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
-        fontSize: 9,
-        letterSpacing: 0.5,
-    },
-    metricStatus: {
-        fontFamily: Theme.fonts.label,
-        fontSize: 8,
-    },
-    metricValue: {
-        fontFamily: Theme.fonts.headingSemi,
-        color: Theme.colors.primary,
-        fontSize: 20,
-    },
-    metricUnit: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
-        fontSize: 9,
-    },
-    verticalDivider: {
-        width: 1,
-        backgroundColor: '#1A1A1A',
-        marginHorizontal: 15,
-    },
-    horizontalDivider: {
-        height: 1,
-        backgroundColor: '#1A1A1A',
-        width: '100%',
-    },
-    aiLink: {
-        marginTop: 40,
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: '#333',
-    },
-    aiLinkText: {
-        fontFamily: Theme.fonts.label,
-        color: Theme.colors.secondary,
+    inlineAlertText: {
+        color: '#fff',
         fontSize: 12,
-        letterSpacing: 1,
-    }
+        fontWeight: 'bold',
+        flex: 1,
+    },
+    viewBtn: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '900',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        width: '100%',
+        borderRadius: 32,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 10,
+    },
+    modalIconBox: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#f5f3ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#1e293b',
+        marginBottom: 12,
+    },
+    modalMsg: {
+        fontSize: 16,
+        color: '#64748b',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 20,
+    },
+    modalInfoBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8fafc',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 8,
+        marginBottom: 24,
+    },
+    modalInfoText: {
+        fontSize: 12,
+        color: '#64748b',
+    },
+    modalActions: {
+        width: '100%',
+        gap: 12,
+    },
+    modalBtn: {
+        width: '100%',
+        height: 56,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    grantBtn: {
+        backgroundColor: '#4c1d95',
+    },
+    grantBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    rejectBtn: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    rejectBtnText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });

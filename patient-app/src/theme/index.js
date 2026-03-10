@@ -1,13 +1,14 @@
 export const Theme = {
     colors: {
-        background: '#080808',
-        primary: '#FFFFFF',
-        secondary: '#555555',
+        background: '#050810',
+        primary: '#6366F1', // Premium Indigo
+        secondary: '#94A3B8', // Slate
         positive: '#22C55E',
         warning: '#F59E0B',
         critical: '#EF4444',
-        border: '#1A1A1A',
+        border: '#1E293B',
         black: '#000000',
+        white: '#FFFFFF',
     },
     fonts: {
         heading: 'Syne_800ExtraBold',

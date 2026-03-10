@@ -78,12 +78,10 @@ export default function App() {
     }, [fontsLoaded]);
 
     if (!fontsLoaded && !forceShow) {
-        return (
-            <View style={{ flex: 1, backgroundColor: '#080808', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 18, letterSpacing: 2 }}>ELEX.AI</Text>
-                <Text style={{ color: '#555555', fontSize: 10, marginTop: 10, letterSpacing: 4 }}>INITIALIZING SYSTEM...</Text>
-            </View>
-        );
+        <View style={{ flex: 1, backgroundColor: '#050810', justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: '#6366F1', fontSize: 24, letterSpacing: 4, fontFamily: 'Syne_800ExtraBold' }}>MULAJNA</Text>
+            <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 10, letterSpacing: 4, fontFamily: 'SpaceMono_400Regular' }}>INITIALIZING INTELLIGENCE...</Text>
+        </View>
     }
 
     return (

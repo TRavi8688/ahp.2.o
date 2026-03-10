@@ -105,7 +105,7 @@ export default function RegisterScreen({ navigation }) {
                         <View style={styles.logoIcon}>
                             <Ionicons name="sparkles-outline" size={40} color="#fff" />
                         </View>
-                        <Text style={styles.title}>Join ELEX.AI</Text>
+                        <Text style={styles.title}>Join Mulajna</Text>
                         <Text style={styles.subtitle}>Create your AI Health Passport in seconds.</Text>
                     </View>
 
@@ -224,7 +224,7 @@ export default function RegisterScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.footerText}>Secure • Private • ELEX.AI</Text>
+                    <Text style={styles.footerText}>Secure • Private • Mulajna</Text>
                 </ScrollView>
             </KeyboardAvoidingView>
         </LinearGradient>
