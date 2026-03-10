@@ -1,139 +1,163 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, Text, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
+from typing import List, Optional
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    role = Column(String) # 'patient' or 'doctor'
-    first_name = Column(String)
-    last_name = Column(String)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
     
-    patient_profile = relationship("Patient", back_populates="user", uselist=False)
-    doctor_profile = relationship("Doctor", back_populates="user", uselist=False)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(50)) # 'patient' or 'doctor'
+    first_name: Mapped[Optional[str]] = mapped_column(String(100))
+    last_name: Mapped[Optional[str]] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    patient_profile: Mapped["Patient"] = relationship(back_populates="user", uselist=False)
+    doctor_profile: Mapped["Doctor"] = relationship(back_populates="user", uselist=False)
 
 class Patient(Base):
     __tablename__ = "patients"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    ahp_id = Column(String, unique=True, index=True)
-    phone_number = Column(String)
-    date_of_birth = Column(String)
-    gender = Column(String)
-    blood_group = Column(String)
-    language_code = Column(String, default="en")
-    password_hash = Column(String, nullable=True) # Secondary AHP login
     
-    user = relationship("User", back_populates="patient_profile")
-    records = relationship("MedicalRecord", back_populates="patient")
-    conditions = relationship("Condition", back_populates="patient")
-    medications = relationship("Medication", back_populates="patient")
-    allergies = relationship("Allergy", back_populates="patient")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    ahp_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    phone_number: Mapped[str] = mapped_column(String(20))
+    date_of_birth: Mapped[Optional[str]] = mapped_column(String(20))
+    gender: Mapped[Optional[str]] = mapped_column(String(20))
+    blood_group: Mapped[Optional[str]] = mapped_column(String(10))
+    language_code: Mapped[str] = mapped_column(String(10), default="en")
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255)) # Secondary AHP login
+    
+    user: Mapped["User"] = relationship(back_populates="patient_profile")
+    records: Mapped[List["MedicalRecord"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
+    conditions: Mapped[List["Condition"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
+    medications: Mapped[List["Medication"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
+    allergies: Mapped[List["Allergy"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
+    dashboard: Mapped["PatientDashboard"] = relationship(back_populates="patient", uselist=False)
 
 class Doctor(Base):
     __tablename__ = "doctors"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    specialty = Column(String)
-    license_number = Column(String, unique=True)
-    license_status = Column(String, default="pending") # pending, verified, rejected
-    license_copy_url = Column(String)
-    verification_notes = Column(Text)
     
-    user = relationship("User", back_populates="doctor_profile")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    specialty: Mapped[Optional[str]] = mapped_column(String(100))
+    license_number: Mapped[str] = mapped_column(String(100), unique=True)
+    license_status: Mapped[str] = mapped_column(String(50), default="pending") # pending, verified, rejected
+    license_copy_url: Mapped[Optional[str]] = mapped_column(String(255))
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text)
+    
+    user: Mapped["User"] = relationship(back_populates="doctor_profile")
 
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    type = Column(String) # 'document', 'scan', etc.
-    file_url = Column(String)
-    raw_text = Column(Text, nullable=True)
-    ai_extracted = Column(JSON, nullable=True)
-    ai_summary = Column(Text, nullable=True)
-    patient_summary = Column(Text, nullable=True)
-    doctor_summary = Column(Text, nullable=True)
-    hidden_by_patient = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    ai_processed_at = Column(DateTime, nullable=True)
     
-    patient = relationship("Patient", back_populates="records")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    type: Mapped[str] = mapped_column(String(50)) # 'document', 'scan', etc.
+    file_url: Mapped[str] = mapped_column(String(255))
+    raw_text: Mapped[Optional[str]] = mapped_column(Text)
+    ai_extracted: Mapped[Optional[dict]] = mapped_column(JSON)
+    ai_summary: Mapped[Optional[str]] = mapped_column(Text)
+    patient_summary: Mapped[Optional[str]] = mapped_column(Text)
+    doctor_summary: Mapped[Optional[str]] = mapped_column(Text)
+    hidden_by_patient: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ai_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    
+    patient: Mapped["Patient"] = relationship(back_populates="records")
 
 class Condition(Base):
     __tablename__ = "conditions"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    name = Column(String)
-    added_by = Column(String) # 'patient', 'doctor', 'ai'
-    confirmed_by_patient = Column(Boolean, default=False)
-    hidden_by_patient = Column(Boolean, default=False)
-    source_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True)
     
-    patient = relationship("Patient", back_populates="conditions")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    name: Mapped[str] = mapped_column(String(255))
+    added_by: Mapped[str] = mapped_column(String(50)) # 'patient', 'doctor', 'ai'
+    confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
+    hidden_by_patient: Mapped[bool] = mapped_column(default=False)
+    source_record_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medical_records.id"))
+    
+    patient: Mapped["Patient"] = relationship(back_populates="conditions")
 
 class Medication(Base):
     __tablename__ = "medications"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    generic_name = Column(String)
-    dosage = Column(String)
-    frequency = Column(String)
-    active = Column(Boolean, default=True)
-    added_by = Column(String)
-    confirmed_by_patient = Column(Boolean, default=False)
-    hidden_by_patient = Column(Boolean, default=False)
-    source_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True)
     
-    patient = relationship("Patient", back_populates="medications")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    generic_name: Mapped[str] = mapped_column(String(255))
+    dosage: Mapped[str] = mapped_column(String(100))
+    frequency: Mapped[Optional[str]] = mapped_column(String(100))
+    active: Mapped[bool] = mapped_column(default=True)
+    added_by: Mapped[str] = mapped_column(String(50))
+    confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
+    hidden_by_patient: Mapped[bool] = mapped_column(default=False)
+    source_record_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medical_records.id"))
+    
+    patient: Mapped["Patient"] = relationship(back_populates="medications")
 
 class Allergy(Base):
     __tablename__ = "allergies"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    allergen = Column(String)
-    severity = Column(String, default="Moderate")
-    added_by = Column(String)
-    confirmed_by_patient = Column(Boolean, default=False)
-    hidden_by_patient = Column(Boolean, default=False)
     
-    patient = relationship("Patient", back_populates="allergies")
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    allergen: Mapped[str] = mapped_column(String(255))
+    severity: Mapped[str] = mapped_column(String(50), default="Moderate")
+    added_by: Mapped[str] = mapped_column(String(50))
+    confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
+    hidden_by_patient: Mapped[bool] = mapped_column(default=False)
+    
+    patient: Mapped["Patient"] = relationship(back_populates="allergies")
 
 class DoctorAccess(Base):
     __tablename__ = "doctor_access"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    doctor_user_id = Column(Integer, ForeignKey("users.id"))
-    doctor_name = Column(String)
-    clinic_name = Column(String)
-    access_level = Column(String) # 'read', 'write'
-    status = Column(String) # 'requested', 'granted', 'revoked'
-    granted_at = Column(DateTime, nullable=True)
-    revoked_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    doctor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    doctor_name: Mapped[str] = mapped_column(String(255))
+    clinic_name: Mapped[Optional[str]] = mapped_column(String(255))
+    access_level: Mapped[str] = mapped_column(String(50)) # 'read', 'write'
+    status: Mapped[str] = mapped_column(String(50)) # 'requested', 'granted', 'revoked'
+    granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 class Notification(Base):
     __tablename__ = "notifications"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
-    doctor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    type = Column(String)
-    title = Column(String)
-    body = Column(String)
-    read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.id"))
+    doctor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    type: Mapped[str] = mapped_column(String(50))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    read: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 class AISummary(Base):
     __tablename__ = "ai_summaries"
-    id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    one_page_summary = Column(Text)
-    patient_summary = Column(Text)
-    doctor_summary = Column(Text)
-    structured_data = Column(JSON) # Dashboard analytics
-    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    one_page_summary: Mapped[str] = mapped_column(Text)
+    patient_summary: Mapped[str] = mapped_column(Text)
+    doctor_summary: Mapped[str] = mapped_column(Text)
+    structured_data: Mapped[dict] = mapped_column(JSON) # Dashboard analytics
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class PatientDashboard(Base):
+    __tablename__ = "patient_dashboards"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), unique=True)
+    data: Mapped[dict] = mapped_column(JSON)  # Aggregated dashboard data (JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    patient: Mapped["Patient"] = relationship(back_populates="dashboard")
+

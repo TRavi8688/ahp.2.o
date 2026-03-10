@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: Optional[str] = None
     S3_BUCKET_NAME: Optional[str] = "ahp-records"
     
+    # AI Keys
+    GEMINI_API_KEY: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    HF_TOKEN: Optional[str] = None
+    SARVAM_KEY: Optional[str] = None
+    ENCRYPTION_KEY: str = "g_oKz_1c5uO8j3HlTzQZ8U0sC9p7L5vY6e3JmN1tWgE="
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

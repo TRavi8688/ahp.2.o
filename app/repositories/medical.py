@@ -1,18 +1,36 @@
-from app.repositories.base import BaseRepository
+from sqlalchemy import select
+from app.repositories.base import AsyncBaseRepository
 from app.models.models import MedicalRecord, Condition, Medication, Allergy, DoctorAccess, Notification
 
-class MedicalRecordRepository(BaseRepository):
-    def get_by_patient(self, patient_id: int):
-        return self.db.query(self.model).filter(self.model.patient_id == patient_id).all()
+class MedicalRecordRepository(AsyncBaseRepository):
+    async def get_by_patient(self, patient_id: int):
+        stmt = select(MedicalRecord).where(MedicalRecord.patient_id == patient_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-class ConditionRepository(BaseRepository):
-    def get_active_by_patient(self, patient_id: int):
-        return self.db.query(self.model).filter(self.model.patient_id == patient_id, self.model.hidden_by_patient == False).all()
+class ConditionRepository(AsyncBaseRepository):
+    async def get_active_by_patient(self, patient_id: int):
+        stmt = select(Condition).where(
+            Condition.patient_id == patient_id, 
+            Condition.hidden_by_patient == False
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-class MedicationRepository(BaseRepository):
-    def get_active_by_patient(self, patient_id: int):
-        return self.db.query(self.model).filter(self.model.patient_id == patient_id, self.model.active == True).all()
+class MedicationRepository(AsyncBaseRepository):
+    async def get_active_by_patient(self, patient_id: int):
+        stmt = select(Medication).where(
+            Medication.patient_id == patient_id, 
+            Medication.active == True
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-class NotificationRepository(BaseRepository):
-    def get_unread_by_patient(self, patient_id: int):
-        return self.db.query(self.model).filter(self.model.patient_id == patient_id, self.model.read == False).all()
+class NotificationRepository(AsyncBaseRepository):
+    async def get_unread_by_patient(self, patient_id: int):
+        stmt = select(Notification).where(
+            Notification.patient_id == patient_id, 
+            Notification.read == False
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
