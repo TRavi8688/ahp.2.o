@@ -7,13 +7,13 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Security
-    SECRET_KEY: str = "super-secret-key-change-in-production"
+    SECRET_KEY: str  # Mandatory environment variable
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # DATABASE
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/ahp_db"
+    DATABASE_URL: str  # Mandatory environment variable
     
     # REDIS
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     HF_TOKEN: Optional[str] = None
     SARVAM_KEY: Optional[str] = None
-    ENCRYPTION_KEY: str = "g_oKz_1c5uO8j3HlTzQZ8U0sC9p7L5vY6e3JmN1tWgE="
+    ENCRYPTION_KEY: str  # Mandatory environment variable
     
     class Config:
         env_file = ".env"

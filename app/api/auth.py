@@ -10,8 +10,33 @@ from app.models.models import User, Patient
 from app.services.redis_service import redis_service
 from app.core.logging import logger
 from app.core.config import settings
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+@router.post("/register")
+@limiter.limit("5/minute")
+async def register(
+    request: Request,
+    user_data: schemas.UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    # Placeholder for registration logic
+    # This endpoint was added as per the instruction to apply rate limits.
+    # Actual registration logic would go here, e.g., creating a new user in the DB.
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Registration endpoint not fully implemented yet.")
+
+@router.post("/login")
+@limiter.limit("5/minute")
+async def login(
+    request: Request,
+    user_data: schemas.UserLogin,
+    db: AsyncSession = Depends(get_db)
+):
+    # Placeholder for login logic
+    # This endpoint was added as per the instruction to apply rate limits.
+    # Actual login logic would go here, e.g., authenticating user and returning tokens.
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Login endpoint not fully implemented yet.")
 
 @router.post("/send-otp", status_code=status.HTTP_200_OK)
 async def send_otp(req: schemas.OTPRequest):

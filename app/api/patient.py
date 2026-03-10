@@ -1,6 +1,6 @@
 import os
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.models import MedicalRecord, Patient
@@ -8,11 +8,14 @@ from app.workers.tasks import process_medical_document_task
 from app.core.config import settings
 from app.services.dashboard_service import DashboardService
 from app.api.deps import get_current_patient
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/patient", tags=["Patient"])
 
 @router.post("/upload-report")
+@limiter.limit("5/minute")
 async def upload_report(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_patient: Patient = Depends(get_current_patient)

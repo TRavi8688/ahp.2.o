@@ -1,11 +1,19 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from datetime import datetime
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.api import auth, patient, profile, doctor
 from app.core.realtime import manager, RealtimeMessage, MessageType
 from app.core.database import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.limiter import limiter
 
 # Initialize Logging
 setup_logging()
@@ -15,6 +23,8 @@ app = FastAPI(
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Set CORS
 app.add_middleware(
