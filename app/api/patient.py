@@ -15,6 +15,8 @@ from app.core.logging import logger
 from app.services.dashboard_service import DashboardService
 from app.services.ai_service import get_ai_service, AsyncAIService
 
+from app.services.s3_service import upload_to_s3
+
 router = APIRouter(prefix="/patient", tags=["Patient"])
 
 # --- COMPATIBILITY ENDPOINTS for Patient App ---
@@ -141,31 +143,39 @@ async def upload_report(
         if len(contents) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="File too large")
 
-        os.makedirs("secure_uploads", exist_ok=True)
+        # 1. Save locally (temporary)
+        os.makedirs("temp_uploads", exist_ok=True)
         safe_filename = f"{uuid.uuid4()}{ext}"
-        file_path = os.path.join("secure_uploads", safe_filename)
+        temp_path = os.path.join("temp_uploads", safe_filename)
         
-        with open(file_path, "wb") as f:
+        with open(temp_path, "wb") as f:
             f.write(contents)
 
-        # TRIGGER AI PIPELINE
+        # 2. Upload to InsForge S3
+        s3_object_name = f"reports/{current_patient.ahp_id or 'anon'}/{safe_filename}"
+        s3_url = upload_to_s3(temp_path, s3_object_name)
+
+        # 3. TRIGGER AI PIPELINE (Use temp path for OCR, but return S3 URL)
         try:
-            analysis = await ai.process_medical_document(file_path, current_patient.language_code)
+            analysis = await ai.process_medical_document(temp_path, current_patient.language_code)
         except Exception as ai_err:
             logger.error(f"AI_PIPELINE_ERROR: {ai_err}")
-            # Fallback for Demo Mode or errors
             analysis = {
                 "patient_summary": "Analysis failed, but record is saved.",
                 "structured_data": {},
                 "raw_text": "Manual review required."
             }
         
+        # Cleanup temp file
+        try: os.remove(temp_path)
+        except: pass
+
         await log_audit_action(
             db, 
             "REPORT_ANALYSIS_COMPLETED", 
             user_id=current_patient.user_id, 
             resource_type="MEDICAL_RECORD",
-            details={"file_name": file.filename}
+            details={"file_name": file.filename, "s3_url": s3_url}
         )
         
         return {
@@ -173,7 +183,7 @@ async def upload_report(
             "summary": analysis.get("patient_summary", "Report analyzed successfully."),
             "extracted_data": analysis.get("structured_data", {}),
             "visual_findings": analysis.get("raw_text", ""),
-            "url": file_path,
+            "url": s3_url, # Now returns the Cloud URL
             "type": "Document",
             "doctor_summary": analysis.get("doctor_summary", "")
         }

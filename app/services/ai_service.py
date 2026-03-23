@@ -54,6 +54,8 @@ class AsyncAIService:
         self.anthropic_key = settings.ANTHROPIC_API_KEY
         self.hf_token = settings.HF_TOKEN
         self.sarvam_key = settings.SARVAM_KEY
+        self.base_url = settings.INSFORGE_BASE_URL
+        self.anon_key = settings.INSFORGE_ANON_KEY
         self._client: Optional[httpx.AsyncClient] = None
 
     async def get_client(self) -> httpx.AsyncClient:

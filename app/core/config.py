@@ -24,31 +24,25 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # DATABASE - Falls back to InsForge PostgreSQL if DATABASE_URL not explicitly set
-    # The InsForge DB host is: ke6vx29r.us-east.insforge.app:5432, db: insforge, user: postgres
-    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
+    # DATABASE - Prioritizes InsForge PostgreSQL in production
+    # Host: ke6vx29r.us-east.insforge.app:5432, db: insforge, user: postgres
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:ahp_secure_2026@ke6vx29r.us-east.insforge.app:5432/insforge"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def build_database_url(cls, v: Any, info: Any) -> Any:
-        """Prioritize explicitly set DATABASE_URL env var. 
-        Handles common Railway/Docker issues like unexpanded bash vars."""
+        # 1. Check if we're in development Mode
+        is_dev = os.environ.get("ENVIRONMENT", "development").lower() == "development"
+        
+        # 2. Prefer explicit env var if set
         raw = os.environ.get("DATABASE_URL", "")
-        url = raw if (raw and "sqlite" not in raw) else v
-        
-        if not url or "sqlite" in str(url):
-            return url or "sqlite+aiosqlite:///./test.db"
-        
-        # Detect unexpanded bash/shell variables like ${DB_PORT}, ${DB_HOST} etc.
-        import re
-        if re.search(r'\$\{?\w+\}?', str(url)):
-            logger.critical(f"DATABASE_URL contains unexpanded shell variables! URL: {url[:50]}...")
-            logger.critical("Set DATABASE_URL to the FULL URL with actual values, not variable references.")
-            # Fall back to SQLite so the app at least starts
+        if raw and "sqlite" not in raw:
+            v = raw
+        elif is_dev and not raw:
+            # Only use SQLite for LOCAL development
             return "sqlite+aiosqlite:///./test.db"
         
-        # Fix common Railway scheme: postgres:// -> postgresql+asyncpg://
-        url = str(url)
+        url = str(v)
         
         # Railway adds ?sslmode=disable which breaks asyncpg. Strip it.
         if "?" in url and "sslmode" in url:

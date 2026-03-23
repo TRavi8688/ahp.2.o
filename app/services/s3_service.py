@@ -8,9 +8,11 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).parent / ".env"
 load_dotenv(_env_path, override=True)
 
-INSFORGE_URL = os.getenv("INSFORGE_URL", "https://ke6vx29r.us-east.insforge.app")
-INSFORGE_KEY = os.getenv("INSFORGE_KEY")
-BUCKET_NAME = "medical-reports"
+from app.core.config import settings
+
+INSFORGE_URL = settings.INSFORGE_BASE_URL
+INSFORGE_KEY = settings.INSFORGE_ANON_KEY
+BUCKET_NAME = settings.S3_BUCKET_NAME
 
 print(f"[s3_service] InsForge URL: {INSFORGE_URL}")
 print(f"[s3_service] InsForge KEY loaded: {'YES' if INSFORGE_KEY else 'NO - MISSING!'}")
