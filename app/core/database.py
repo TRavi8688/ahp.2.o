@@ -1,5 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.exc import OperationalError
 from app.core.config import settings
+from app.core.logging import logger
 
 # Detect database type for correct pooling configuration
 _is_sqlite = "sqlite" in settings.async_database_url
@@ -15,11 +17,15 @@ if not _is_sqlite:
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
-    _engine_kwargs["pool_size"] = 20
-    _engine_kwargs["max_overflow"] = 10
-    _engine_kwargs["pool_recycle"] = 300  # Recycle stale connections every 5 min
-    _engine_kwargs["connect_args"] = {"ssl": ctx, "command_timeout": 60, "server_settings": {"search_path": "public"}}
-    # Removed invalid prepared_statement_cache_size kwarg
+    _engine_kwargs["pool_size"] = 25 # Increased for Enterprise Load
+    _engine_kwargs["max_overflow"] = 15
+    _engine_kwargs["pool_recycle"] = 300  
+    _engine_kwargs["pool_timeout"] = 10 # Fail fast if pool is exhausted
+    _engine_kwargs["connect_args"] = {
+        "ssl": ctx, 
+        "command_timeout": 30, # Shorter timeout for better responsiveness
+        "server_settings": {"search_path": "public"}
+    }
 
 # Enterprise-grade async database engine
 engine = create_async_engine(
@@ -37,9 +43,16 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 async def get_db():
-    """Dependency for providing an asynchronous database session."""
+    """Enterprise-grade DB dependency with fail-fast operational error handling."""
     async with AsyncSessionLocal() as session:
         try:
+            # Operational check on every request (via pool_pre_ping inside engine)
             yield session
+        except OperationalError as e:
+            logger.critical("DATABASE_OFFLINE: Could not connect to PostgreSQL.", error=str(e))
+            raise
+        except Exception as e:
+            logger.error(f"DATABASE_ERROR: {str(e)}")
+            raise
         finally:
             await session.close()

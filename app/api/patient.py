@@ -138,59 +138,85 @@ async def upload_report(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid file type")
 
-    try:
-        contents = await file.read()
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="File too large")
+    import shutil
+    from arq import create_pool
+    from arq.connections import RedisSettings
 
-        # 1. Save locally (temporary)
+    # --- ULTIMATE RESILIENCE: Global Backpressure (CHECK EARLY) ---
+    try:
+        redis_bp = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+        current_depth = await redis_bp.llen("arq:queue")
+        if current_depth > 50:
+            logger.error(f"BACKPRESSURE_TRIPPED: Queue depth {current_depth} > threshold 50.")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="System is currently overloaded. Chitti is processing a backlog. Please try again in a few minutes.",
+                headers={"Retry-After": "300"}
+            )
+    except HTTPException:
+        raise
+    except Exception as bp_err:
+        logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}). Proceeding.")
+
+    try:
+        # 1. Memory-efficient streaming to local temp file
         os.makedirs("temp_uploads", exist_ok=True)
         safe_filename = f"{uuid.uuid4()}{ext}"
         temp_path = os.path.join("temp_uploads", safe_filename)
         
-        with open(temp_path, "wb") as f:
-            f.write(contents)
+        # Stream directly from the SpooledTemporaryFile to disk
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        # 2. Upload to InsForge S3
+        # 2. Upload to InsForge S3 (Synchronous call but decoupled from analysis)
         s3_object_name = f"reports/{current_patient.ahp_id or 'anon'}/{safe_filename}"
         s3_url = upload_to_s3(temp_path, s3_object_name)
 
-        # 3. TRIGGER AI PIPELINE (Use temp path for OCR, but return S3 URL)
+        # 3. Create a Placeholder Record (State: Processing)
+        new_record = models.MedicalRecord(
+            patient_id=current_patient.id,
+            type="Document",
+            file_url=s3_url,
+            raw_text="[AI_PROCESSING_IN_PROGRESS]",
+            ai_summary="Your report is being analyzed by Chitti...",
+            patient_summary="Analysis in progress..."
+        )
+        db.add(new_record)
+        await db.commit()
+
+        # 4. ENQUEUE TO ARQ WORKER
         try:
-            analysis = await ai.process_medical_document(temp_path, current_patient.language_code)
-        except Exception as ai_err:
-            logger.error(f"AI_PIPELINE_ERROR: {ai_err}")
-            analysis = {
-                "patient_summary": "Analysis failed, but record is saved.",
-                "structured_data": {},
-                "raw_text": "Manual review required."
-            }
-        
-        # Cleanup temp file
+            redis = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+
+            job = await redis.enqueue_job('process_medical_document_task', new_record.id, s3_object_name)
+            job_id = job.job_id
+        except Exception as queue_err:
+            logger.error(f"QUEUE_ERROR: {queue_err}")
+            job_id = "no_queue"
+
+        # Cleanup temp file locally
         try: os.remove(temp_path)
         except: pass
 
         await log_audit_action(
             db, 
-            "REPORT_ANALYSIS_COMPLETED", 
+            "REPORT_UPLOADED_FOR_ANALYSIS", 
             user_id=current_patient.user_id, 
             resource_type="MEDICAL_RECORD",
-            details={"file_name": file.filename, "s3_url": s3_url}
+            details={"record_id": new_record.id, "job_id": job_id}
         )
         
         return {
-            "status": "success",
-            "summary": analysis.get("patient_summary", "Report analyzed successfully."),
-            "extracted_data": analysis.get("structured_data", {}),
-            "visual_findings": analysis.get("raw_text", ""),
-            "url": s3_url, # Now returns the Cloud URL
-            "type": "Document",
-            "doctor_summary": analysis.get("doctor_summary", "")
+            "status": "processing",
+            "record_id": new_record.id,
+            "job_id": job_id,
+            "message": "Analysis started in background.",
+            "url": s3_url
         }
 
     except Exception as e:
         logger.error(f"UPLOAD_ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/confirm-and-save-report")
 async def confirm_report(
@@ -454,3 +480,39 @@ async def revoke_access(
     await log_audit_action(db, "ACCESS_REVOKED", user_id=current_patient.user_id, details={"doctor": access_req.doctor_name})
     
     return {"status": "success", "message": f"Access revoked for {access_req.doctor_name}"}
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    current_patient: models.Patient = Depends(deps.get_current_patient),
+    db: AsyncSession = Depends(deps.get_db)
+):
+    """Polls the status of a background AI processing job."""
+    from arq.connections import RedisSettings
+    from arq.jobs import Job, JobStatus
+    from arq import create_pool
+    
+    redis = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+    job_handle = Job(job_id, redis)
+    status = await job_handle.status()
+    
+    # Map Arq status to our simpler schema
+    status_map = {
+        JobStatus.queued: "queued",
+        JobStatus.deferred: "queued",
+        JobStatus.in_progress: "in_progress",
+        JobStatus.complete: "completed",
+        JobStatus.not_found: "not_found"
+    }
+    
+    friendly_status = status_map.get(status, "unknown")
+    result = None
+    if status == JobStatus.complete:
+        result_info = await job_handle.result_info()
+        result = {"success": True, "info": str(result_info)}
+    
+    return {
+        "job_id": job_id,
+        "status": friendly_status,
+        "result": result
+    }

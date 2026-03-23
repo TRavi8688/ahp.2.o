@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Typography, Button, IconButton, Chip, Avatar, Grid, Card, CardContent, Divider, TextField, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { API_BASE_URL } from '../api';
@@ -300,9 +301,9 @@ export default function PatientDetailView() {
                             />
                         </Box>
 
-                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.9)', lineHeight: 1.8, mb: 3, fontWeight: 500 }}>
-                            {patient.ai_summary || "No clinical insight available for this patient."}
-                        </Typography>
+                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.9)', lineHeight: 1.8, mb: 3, fontWeight: 500 }}
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(patient.ai_summary || "No clinical insight available for this patient.") }}
+                        />
 
                         <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -460,7 +461,9 @@ export default function PatientDetailView() {
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
                                     <Typography variant="body1" sx={{ color: '#fff', fontWeight: '900', mb: 0.5 }}>{r.title}</Typography>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>{r.ai_summary}</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}
+                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(r.ai_summary) }}
+                                    />
                                     {r.uploaded_by && (
                                         <Typography variant="caption" sx={{ color: '#2dd4bf', fontWeight: '900', mt: 1, display: 'block', letterSpacing: 0.5 }}>
                                             DATA SOURCE: {r.uploaded_by.toUpperCase()}

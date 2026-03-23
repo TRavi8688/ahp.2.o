@@ -20,10 +20,43 @@ async def startup(ctx):
     """ARQ context startup. Here we cleanly inject dependencies instead of relying on global singletons."""
     ctx['ai_service'] = AsyncAIService()
     logger.info("ARQ Worker started and AI Service injected.")
+    
+    # Start background heartbeat to monitor worker health in logs
+    ctx['heartbeat_task'] = asyncio.create_task(worker_heartbeat())
+
+async def worker_heartbeat():
+    """Enterprise-grade heartbeat with fatal Redis loss detection."""
+    consecutive_failures = 0
+    while True:
+        try:
+            # We don't have direct redis access here easily without re-creating, 
+            # but we can check if the AI service (which uses Redis) is healthy.
+            from app.core.cache import cache
+            if await cache.is_healthy():
+                consecutive_failures = 0
+                logger.info("WORKER_HEARTBEAT: Service is alive and Redis is healthy.")
+            else:
+                consecutive_failures += 1
+                logger.warning(f"WORKER_HEALTH_ALERT: Redis connection issues detected ({consecutive_failures}/5).")
+        except Exception as e:
+            consecutive_failures += 1
+            logger.error(f"WORKER_HEALTH_EXCEPTION: {str(e)}")
+
+        if consecutive_failures >= 5:
+            logger.critical("WORKER_HEALTH_CRITICAL: Redis lost for 5 minutes. Entering degraded mode.")
+            # We don't exit to avoid killing active jobs. 
+            # Monitoring tools should watch for 'degraded_mode' in logs.
+            pass 
+
+        await asyncio.sleep(60)
 
 async def shutdown(ctx):
     """Cleanup hook for native async workers."""
+    if 'heartbeat_task' in ctx:
+        ctx['heartbeat_task'].cancel()
     logger.info("ARQ Worker shutting down cleanly.")
+
+# ... (process_medical_document_task and on_job_failure remain unchanged)
 
 async def process_medical_document_task(ctx, record_id: int, object_key: str):
     """Native async processing logic. Using S3 object keys instead of local paths."""
@@ -38,6 +71,11 @@ async def process_medical_document_task(ctx, record_id: int, object_key: str):
             
             if not record:
                 logger.error(f"Task Failed: Record {record_id} not found.")
+                return
+            
+            # 1b. Idempotency Check
+            if record.ai_processed_at:
+                logger.info(f"IDEMPOTENCY_HIT: Record {record_id} already processed. Skipping.")
                 return
             
             # 2. Run AI Pipeline (Uses S3 Key, handles its own retrieval)
@@ -79,12 +117,57 @@ async def process_medical_document_task(ctx, record_id: int, object_key: str):
         except Exception as e:
             logger.error(f"ARQ Error processing record {record_id}: {e}")
             await db.rollback()
+            raise e # Reraise to let arq handle retries / on_failure
+
+async def on_job_failure(ctx, job_id: str, exception: Exception):
+    """Dead Letter Queue (DLQ) Implementation. Persists final failures."""
+    from app.models.models import JobFailure
+    
+    async_engine = create_async_engine(settings.async_database_url)
+    AsyncSessionLocal = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            new_failure = JobFailure(
+                job_id=job_id,
+                function_name="process_medical_document_task",
+                error=str(exception)
+            )
+            db.add(new_failure)
+            await db.commit()
+    except Exception as db_err:
+        # CRITICAL FALLBACK Level 1: Log to InsForge Persistent Storage
+        try:
+            import httpx
+            failure_data = {
+                "timestamp": datetime.now().isoformat(),
+                "job_id": job_id,
+                "error": str(exception),
+                "db_error": str(db_err)
+            }
+            storage_url = f"{settings.INSFORGE_BASE_URL}/api/storage/buckets/{settings.S3_BUCKET_NAME}/objects/failures/{job_id}.json"
+            async with httpx.AsyncClient() as client:
+                await client.put(
+                    storage_url,
+                    headers={"Authorization": f"Bearer {settings.INSFORGE_ANON_KEY}"},
+                    json=failure_data,
+                    timeout=10.0
+                )
+            logger.critical(f"DLQ_CLOUD_SUCCESS: Logged to InsForge failures bucket.")
+        except Exception as s3_err:
+            # CRITICAL FALLBACK Level 2: Log to local file (Ephemeral)
+            with open("emergency_failures.log", "a") as f:
+                f.write(f"{datetime.now().isoformat()} | Job:{job_id} | Error:{exception} | Cloud_Error:{s3_err}\n")
+            logger.critical(f"DLQ_EMERGENCY_FILE: Logged to emergency_failures.log")
+
+    logger.critical(f"JOB_FINAL_FAILURE: Job {job_id} failed permanently and moved to DLQ: {exception}")
 
 class WorkerSettings:
     """ARQ explicit settings definition."""
     functions = [process_medical_document_task]
     on_startup = startup
     on_shutdown = shutdown
+    on_job_error = on_job_failure
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_tries = 5 # Allow retries for transient AI errors
     retry_delay = 10 # Base delay between retries

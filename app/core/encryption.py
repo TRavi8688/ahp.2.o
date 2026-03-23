@@ -45,45 +45,37 @@ class StringEncryptedType(TypeDecorator):
     def process_result_value(self, value, dialect):
         if value is None:
             return None
+        
+        # 1. Prepare keys (Primary + Retired)
+        primary_key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
+        retired_keys = []
+        if hasattr(settings, "PREVIOUS_ENCRYPTION_KEYS") and settings.PREVIOUS_ENCRYPTION_KEYS:
+            retired_keys = [hashlib.sha256(k.encode()).digest() for k in settings.PREVIOUS_ENCRYPTION_KEYS]
+        
+        all_keys = [primary_key] + retired_keys
+        
         try:
-             aesgcm = self._get_aesgcm()
-             data = base64.b64decode(value.encode('utf-8'))
-             nonce = data[:12]
-             ciphertext = data[12:]
-             return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
-        except Exception as e:
-             logger.critical(f"DECRYPTION_FAILURE: {e}")
-             return "DECRYPTION_ERROR"
-
-class TextEncryptedType(TypeDecorator):
-    """AES-GCM encryption for SQLAlchemy Text fields with lazy key loader."""
-    impl = Text
-    cache_ok = True
-
-    def _get_aesgcm(self):
-        if not settings.ENCRYPTION_KEY:
-             raise ValueError("CRITICAL: ENCRYPTION_KEY not found in environment.")
-        key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
-        return AESGCM(key)
-
-    def process_bind_param(self, value, dialect):
-        if not value: return None
-        aesgcm = self._get_aesgcm()
-        nonce = os.urandom(12)
-        ciphertext = aesgcm.encrypt(nonce, value.encode('utf-8'), None)
-        return base64.b64encode(nonce + ciphertext).decode('utf-8')
-
-    def process_result_value(self, value, dialect):
-        if not value: return None
-        try:
-            aesgcm = self._get_aesgcm()
             data = base64.b64decode(value.encode('utf-8'))
             nonce = data[:12]
             ciphertext = data[12:]
-            return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
-        except Exception as e:
-            logger.critical(f"DECRYPTION_FAILURE: {e}")
+            
+            # Try all keys in sequence
+            for k in all_keys:
+                try:
+                    aesgcm = AESGCM(k)
+                    return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
+                except Exception:
+                    continue
+            
+            logger.critical("DECRYPTION_FAILURE: No valid key found for data.")
             return "DECRYPTION_ERROR"
+        except Exception as e:
+            logger.error(f"DECRYPTION_CRASH: {e}")
+            return "DECRYPTION_ERROR"
+
+class TextEncryptedType(StringEncryptedType):
+    """AES-GCM encryption for SQLAlchemy Text fields (unlimited length)."""
+    impl = Text
 
 def encrypt_value(value: str) -> str:
     """Standalone AES-GCM encryption helper."""
@@ -95,15 +87,29 @@ def encrypt_value(value: str) -> str:
     return base64.b64encode(nonce + ciphertext).decode('utf-8')
 
 def decrypt_value(encrypted_value: str) -> str:
-    """Standalone AES-GCM decryption helper."""
+    """Standalone AES-GCM decryption helper with rotation support."""
     if not encrypted_value: return ""
-    key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
-    aesgcm = AESGCM(key)
+    
+    primary_key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
+    retired_keys = []
+    if hasattr(settings, "PREVIOUS_ENCRYPTION_KEYS") and settings.PREVIOUS_ENCRYPTION_KEYS:
+        retired_keys = [hashlib.sha256(k.encode()).digest() for k in settings.PREVIOUS_ENCRYPTION_KEYS]
+    
+    all_keys = [primary_key] + retired_keys
+    
     try:
         data = base64.b64decode(encrypted_value.encode('utf-8'))
         nonce = data[:12]
         ciphertext = data[12:]
-        return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
+        
+        for k in all_keys:
+            try:
+                aesgcm = AESGCM(k)
+                return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
+            except Exception:
+                continue
+        
+        raise DecryptionError("No valid encryption key found for the data.")
     except Exception as e:
         logger.critical(f"DECRYPTION_FAILURE: Standalone decrypt failed - {e}")
         raise DecryptionError("Failed to decrypt field value.") from e

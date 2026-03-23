@@ -209,5 +209,11 @@ class PatientProfileResponse(BaseModel):
     gender: Optional[str] = None
     recent_records: List[MedicalRecordResponse] = []
 
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str # queued, in_progress, completed, failed
+    progress: int = 0
+    result: Optional[dict] = None
+
 class SetPasswordRequest(BaseModel):
     password: str
