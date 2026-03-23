@@ -1,0 +1,47 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+.env
+**/.venv
+**/env/
+**/venv/
+**/ENV/
+**/build/
+**/dist/
+**/*.egg-info/
+**/.pytest_cache/
+
+# Node.js
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Logs
+*.log
+uploads/
+secure_uploads/
+*.db
+test.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.gemini/
+.agents/
+.agent/
+brain/
+alembic/__pycache__/
+our-jorny/
+old-ahp/
+
+# Expo
+**/.expo/
+**/web-build/
+
+# Railway
+.railway/
