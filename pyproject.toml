@@ -30,6 +30,8 @@ dependencies = [
     "Pillow>=10.2.0",
     "pytesseract>=0.3.10",
     "cryptography>=42.0.0",
+    "psutil>=5.9.0",
+    "opentelemetry-exporter-otlp>=1.23.0",
     "twilio (>=9.10.3,<10.0.0)",
 ]
 
