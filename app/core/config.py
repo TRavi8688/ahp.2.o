@@ -31,8 +31,9 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def build_database_url(cls, v: Any, info: Any) -> Any:
-        # 1. Check if we're in development Mode
-        is_dev = os.environ.get("ENVIRONMENT", "development").lower() == "development"
+        # 1. Check if we're in development Mode (Default to production)
+        env = os.environ.get("ENVIRONMENT", "production").lower()
+        is_dev = env == "development"
         
         # 2. Prefer explicit env var if set
         raw = os.environ.get("DATABASE_URL", "")
@@ -41,6 +42,9 @@ class Settings(BaseSettings):
         elif is_dev and not raw:
             # Only use SQLite for LOCAL development
             return "sqlite+aiosqlite:///./test.db"
+        elif not is_dev and not raw and not v:
+             # Safety check for production mistyped env vars
+             logger.critical("PRODUCTION_ERROR: No DATABASE_URL found. App will likely crash.")
         
         url = str(v)
         
@@ -117,27 +121,39 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    def validate_secrets(self):
-        """Warn or Fail for missing secrets."""
-        # For local SQLite development, we allow some leniency
-        if "sqlite" in self.DATABASE_URL:
-            logger.info("SQLITE_DETECTED: Skipping strict production secret validation.")
+    def validate_production_config(self):
+        """Strict fail-fast validation for Production environments."""
+        env = os.environ.get("ENVIRONMENT", "production").lower()
+        if env == "development":
+            logger.info("VALIDATION: Development mode active. Skipping strict checks.")
             return
 
-        critical_secrets = [
-            ("ACCESS_TOKEN_SECRET", self.ACCESS_TOKEN_SECRET),
-            ("REFRESH_TOKEN_SECRET", self.REFRESH_TOKEN_SECRET),
-            ("ENCRYPTION_KEY", self.ENCRYPTION_KEY),
-            ("DATABASE_URL", self.DATABASE_URL)
-        ]
+        # 1. Database URL Safety
+        if not self.DATABASE_URL or "sqlite" in self.DATABASE_URL:
+            logger.critical("PRODUCTION_BLOCKER: DATABASE_URL is missing or uses SQLite in production.")
+            raise RuntimeError("CRITICAL: PRODUCTION requires a PostgreSQL connection.")
+
+        # 2. Critical Secret Verification
+        missing_secrets = []
+        if self.ACCESS_TOKEN_SECRET == "8v93k4m5n6p7q8r9s0t1u2v3w4x5y6z7a8b9c0d1e2f3g4h5i6j7k8l9m0n1o2p":
+            missing_secrets.append("ACCESS_TOKEN_SECRET (Used Default)")
+        if self.ENCRYPTION_KEY == "VTnc-u0Pxk9_0QB2v88NyOZAzJqTeGk6QGz7o_B3i64=":
+            missing_secrets.append("ENCRYPTION_KEY (Used Default)")
         
-        for name, value in critical_secrets:
-            if not value or (name != "DATABASE_URL" and len(value) < 16):
-                 # Log but don't crash the boot process immediately. 
-                 # The individual services will fail when called.
-                 logger.critical(f"DEPLOYMENT_ERROR: {name} is MISSING or INVALID in environment.")
+        if missing_secrets:
+            logger.critical(f"PRODUCTION_BLOCKER: Default secrets detected in production: {', '.join(missing_secrets)}")
+            raise RuntimeError("CRITICAL: Production requires unique, secure secrets.")
+
+        # 3. System Binary Check (Tesseract)
+        import shutil
+        if not shutil.which("tesseract"):
+            logger.critical("PRODUCTION_BLOCKER: 'tesseract' binary not found. OCR will fail.")
+            # We don't necessarily crash the whole app if OCR is only one module, 
+            # BUT for AHP it's a core dependency.
+            raise RuntimeError("CRITICAL: tesseract-ocr binary missing from system path.")
+
+        logger.info("VALIDATION: Production configuration verified.")
 
 settings = Settings()
-# Call validation but don't crash the main process directly here
-# Individual components like Encryption/Auth will fail-safe when called.
-settings.validate_secrets()
+# Call validation early — If this fails, the process should not even start.
+settings.validate_production_config()

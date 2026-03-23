@@ -111,18 +111,42 @@ app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def health_check():
-    """Unconditional health check — always returns 200 so deployments never crash-loop."""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+    """Enhanced health check with diagnostic awareness."""
+    import shutil
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "environment": os.environ.get("ENVIRONMENT", "production"),
+        "features": {
+            "ocr_binary": bool(shutil.which("tesseract")),
+            "ai_providers": {
+                "gemini": bool(settings.GEMINI_API_KEY),
+                "groq": bool(settings.GROQ_API_KEY),
+                "insforge": bool(settings.INSFORGE_ANON_KEY)
+            }
+        }
+    }
 
 @app.get("/ready")
 async def readiness_probe(db: AsyncSession = Depends(get_db)):
     """Deep readiness check that verifies DB connectivity."""
     try:
+        # 1. Database Check
         await db.execute(select(1))
-        return {"status": "ready", "database": "connected"}
+        
+        # 2. Key Check (Non-blocking but reported)
+        db_status = "connected"
+        if "sqlite" in settings.DATABASE_URL and os.environ.get("ENVIRONMENT") != "development":
+             db_status = "unsupported_sqlite_in_production"
+             
+        return {
+            "status": "ready",
+            "database": db_status,
+            "config_valid": True
+        }
     except Exception as e:
         logger.error(f"Readiness check failed: {str(e)}")
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        raise HTTPException(status_code=503, detail="Service Unavailable")
 
 # WebSocket Endpoint
 @app.websocket("/ws/{token}")
