@@ -47,7 +47,18 @@ class Settings(BaseSettings):
              logger.critical("PRODUCTION_ERROR: No DATABASE_URL found. App will likely crash.")
         
         url = str(v)
+
+        # 3. INTERPOLATION HARDENING: Resolve literals like ${DB_PORT} or $DB_PORT
+        # This fixes issues where Railway or Docker-Compose pass raw template strings.
+        import re
+        def resolve_env_match(match):
+            var_name = match.group(1) or match.group(2)
+            return os.environ.get(var_name, f"${{{var_name}}}") # Fallback to original if not found
+            
+        url = re.sub(r"\$\{([^}]+)\}", resolve_env_match, url)
+        url = re.sub(r"\$([a-zA-Z_][a-zA-Z0-9_]*)", resolve_env_match, url)
         
+        # 4. Final cleaning
         # Railway adds ?sslmode=disable which breaks asyncpg. Strip it.
         if "?" in url and "sslmode" in url:
             url = url.split("?")[0]
