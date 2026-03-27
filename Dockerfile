@@ -15,6 +15,7 @@ COPY doctor-app/ .
 # Empty string = relative URL (same domain as backend)
 ENV REACT_APP_API_BASE_URL=""
 ENV REACT_APP_WS_BASE_URL=""
+ENV CI=false
 RUN npm run build
 
 
@@ -28,6 +29,7 @@ RUN npm install 2>/dev/null || npm install --legacy-peer-deps
 COPY patient-app/ .
 # Empty string = relative URL (same domain as backend)
 ENV EXPO_PUBLIC_API_BASE_URL=""
+ENV CI=false
 RUN npx expo export --platform web
 
 
