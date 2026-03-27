@@ -59,9 +59,14 @@ async def startup_event():
 
 # --- Health Check ---
 @app.get("/health")
-async def health_check():
-    """Liveness probe for Nginx/K8s."""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+async def health_check(request: Request):
+    """Liveness probe with header introspection."""
+    # Debug: Print headers to see what Railway is sending
+    logger.info(f"HEALTH_CHECK_QUERY: Headers: {dict(request.headers)}")
+    return JSONResponse(
+        status_code=200,
+        content={"status": "healthy", "timestamp": datetime.now().isoformat()}
+    )
 
 @app.get("/metrics")
 async def get_metrics():

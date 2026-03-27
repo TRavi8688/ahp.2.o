@@ -11,6 +11,6 @@ if [ "$SERVICE_TYPE" = "worker" ]; then
 else
     echo "🌐 Starting Mulajna API on port $PORT..."
     # RESTORING FULL APP: Single worker + standard asyncio loop for RAM stability
-    # 512MB RAM is now dedicated to this single process
-    exec uvicorn app.main:app --host "0.0.0.0" --port "$PORT" --log-level info --workers 1 --loop asyncio --timeout-keep-alive 75
+    # Explicitly trusting all proxies for Railway compatibility
+    exec uvicorn app.main:app --host "0.0.0.0" --port "$PORT" --log-level info --workers 1 --loop asyncio --timeout-keep-alive 75 --proxy-headers --forwarded-allow-ips="*"
 fi
