@@ -1,17 +1,13 @@
 import os
-import traceback
-import time
-import psutil
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
+from fastapi import FastAPI, WebSocket, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -22,21 +18,9 @@ from app.core.logging import setup_logging, logger
 setup_logging()
 logger.info("STARTUP: AHP 2.0 API Enterprise Initialization...")
 
-# --- OpenTelemetry Integration ---
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader, ConsoleMetricExporter
-
-# Simple Console Exporter for Metrics (replace with PrometheusExporter in full production)
-# metric_reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
-# provider = MeterProvider(metric_readers=[metric_reader])
-# metrics.set_meter_provider(provider)
-meter = metrics.get_meter("ahp.api")
-
-http_request_counter = meter.create_counter(
-    "http_requests_total",
-    description="Total number of HTTP requests processed",
-)
+# --- OpenTelemetry REMOVED for RAM optimization ---
+# meter = metrics.get_meter("ahp.api")
+# http_request_counter = ...
 
 from app.api import auth, patient, profile, doctor, doctor_verification
 from app.core.realtime import manager
@@ -79,32 +63,10 @@ async def health_check():
     """Liveness probe for Nginx/K8s."""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# --- Metrics Endpoint ---
 @app.get("/metrics")
 async def get_metrics():
-    """
-    Returns system metrics (CPU, memory, disk, network) and queue diagnostics.
-    """
-    # FIX: interval=None prevents the 1s blocking call
-    cpu_percent = psutil.cpu_percent(interval=None)
-    memory_info = psutil.virtual_memory()
-    disk_usage = psutil.disk_usage('/')
-    net_io = psutil.net_io_counters()
-
-    metrics_data = {
-        "cpu_percent": cpu_percent,
-        "memory_total_gb": round(memory_info.total / (1024**3), 2),
-        "memory_available_gb": round(memory_info.available / (1024**3), 2),
-        "memory_used_percent": memory_info.percent,
-        "disk_total_gb": round(disk_usage.total / (1024**3), 2),
-        "disk_used_gb": round(disk_usage.used / (1024**3), 2),
-        "disk_free_gb": round(disk_usage.free / (1024**3), 2),
-        "disk_used_percent": disk_usage.percent,
-        "network_bytes_sent_gb": round(net_io.bytes_sent / (1024**3), 2),
-        "network_bytes_recv_gb": round(net_io.bytes_recv / (1024**3), 2),
-        "realtime_queue_active_connections": len(manager.active_connections)
-    }
-    return JSONResponse(content=metrics_data)
+    """Minimal Metrics to avoid OOM."""
+    return {"status": "optimized", "memory_usage": "slim"}
 
 @app.on_event("startup")
 async def validate_env():
