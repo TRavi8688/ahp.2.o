@@ -3,11 +3,13 @@ from sqlalchemy.exc import OperationalError
 from app.core.config import settings
 from app.core.logging import logger
 
+from typing import Dict, Any
+
 # Detect database type for correct pooling configuration
 _is_sqlite = "sqlite" in settings.async_database_url
 
-# Build engine kwargs — SQLite does NOT support pool_size/max_overflow
-_engine_kwargs = {
+# Build engine kwargs — Explicitly typed to allow diverse pooling options
+_engine_kwargs: Dict[str, Any] = {
     "echo": False,
     "pool_pre_ping": True,
 }
@@ -17,10 +19,10 @@ if not _is_sqlite:
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
-    _engine_kwargs["pool_size"] = 25 # Increased for Enterprise Load
-    _engine_kwargs["max_overflow"] = 15
+    _engine_kwargs["pool_size"] = 50 # Optimized for C1K cluster scaling
+    _engine_kwargs["max_overflow"] = 20
     _engine_kwargs["pool_recycle"] = 300  
-    _engine_kwargs["pool_timeout"] = 10 # Fail fast if pool is exhausted
+    _engine_kwargs["pool_timeout"] = 5 # Fail fast: 5s timeout instead of 10s
     _engine_kwargs["connect_args"] = {
         "ssl": ctx, 
         "command_timeout": 30, # Shorter timeout for better responsiveness

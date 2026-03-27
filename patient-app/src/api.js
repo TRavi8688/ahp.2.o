@@ -1,17 +1,26 @@
 import { Platform } from 'react-native';
 
-// --- API CONFIGURATION ---
-export const USE_MOCK_API = false;
+// --- PRODUCTION-FIRST API CONFIGURATION ---
+const FALLBACK_PROD_URL = "https://api.mulajna.com"; // Replace with real domain when live
 
-// In unified deployment: API is on the same domain, so relative URL works
-const FULL_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+// Priority: Env Variable > Web Location > Hardcoded Prod Fallback
+const getBaseUrl = () => {
+    if (process.env.EXPO_PUBLIC_API_BASE_URL) return process.env.EXPO_PUBLIC_API_BASE_URL;
+    
+    if (Platform.OS === 'web') {
+        const { protocol, host } = window.location;
+        return `${protocol}//${host}`;
+    }
 
-export const API_BASE_URL = FULL_BASE_URL 
-    ? `${FULL_BASE_URL}/api/v1`
-    : "/api/v1";
+    return FALLBACK_PROD_URL;
+};
 
-export const WS_BASE_URL = FULL_BASE_URL
-    ? FULL_BASE_URL.replace(/^http/, 'ws')
-    : (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : 'ws://localhost:8000');
+const BASE = getBaseUrl();
 
-console.log(`[Patient Config] API Base URL: ${API_BASE_URL}`);
+export const API_BASE_URL = `${BASE}/api/v1`;
+
+export const WS_BASE_URL = BASE.startsWith('https') 
+    ? BASE.replace('https', 'wss') 
+    : BASE.replace('http', 'ws');
+
+console.log(`[Mulajna Network] Core Endpoint: ${API_BASE_URL}`);

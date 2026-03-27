@@ -82,186 +82,240 @@ export default function PatientList() {
     };
 
     return (
-        <Box sx={{ display: 'flex', height: 'calc(100vh - 120px)', gap: 3, mx: 'auto' }}>
+        <Box sx={{ display: 'flex', height: 'calc(100vh - 120px)', gap: 3, mx: 'auto', background: 'transparent' }}>
 
-            {/* Left Pane - Patient List */}
-            <Box className="glass-card" sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.6)' }}>
-                {/* Search Header */}
-                <Box sx={{ p: 2, borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', gap: 2 }}>
+            {/* Left Pane - Intelligence Roster */}
+            <Box className="glass-card" sx={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                overflow: 'hidden', 
+                border: '1px solid rgba(255,255,255,0.05)', 
+                bgcolor: 'rgba(255,255,255,0.02)',
+                borderRadius: '32px',
+                backdropFilter: 'blur(40px)'
+            }}>
+                {/* Precision Search Header */}
+                <Box sx={{ p: 4, display: 'flex', gap: 2, alignItems: 'center' }}>
                     <Box sx={{
                         flex: 1,
                         display: 'flex',
                         alignItems: 'center',
-                        bgcolor: '#f3f4f6',
-                        borderRadius: 2,
-                        px: 2,
-                        py: 1
+                        bgcolor: 'rgba(255,255,255,0.03)',
+                        borderRadius: '20px',
+                        px: 3,
+                        py: 1.5,
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        '&:focus-within': { borderColor: '#0d9488', bgcolor: 'rgba(13, 148, 136, 0.02)' }
                     }}>
-                        <SearchIcon sx={{ color: '#9ca3af', mr: 1 }} />
+                        <SearchIcon sx={{ color: '#64748b', mr: 2 }} />
                         <InputBase
-                            placeholder="Search by name or AHP ID..."
-                            sx={{ flex: 1, fontSize: '0.875rem' }}
+                            placeholder="Locate patient by name or AHP identity..."
+                            sx={{ flex: 1, fontSize: '0.95rem', color: 'white', fontWeight: 500 }}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </Box>
-                    <Button variant="outlined" startIcon={<FilterListIcon />} sx={{ color: '#4b5563', borderColor: '#d1d5db', textTransform: 'none' }}>
-                        Filter
-                    </Button>
+                    <IconButton sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#fff', borderRadius: '16px', p: 1.8, border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <FilterListIcon />
+                    </IconButton>
                 </Box>
 
-                {/* List Body */}
-                <List sx={{ flex: 1, overflowY: 'auto', p: 0 }}>
+                {/* Directory Body */}
+                <List sx={{ flex: 1, overflowY: 'auto', p: 0, px: 2 }}>
                     {isLoading ? (
-                        <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <Typography color="text.secondary">Loading your patients...</Typography>
+                        <Box sx={{ p: 10, textAlign: 'center' }}>
+                            <CircularProgress size={30} sx={{ color: '#0d9488', mb: 2 }} />
+                            <Typography sx={{ color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>SYNCHRONIZING ROSTER...</Typography>
                         </Box>
                     ) : filteredPatients.map((patient) => {
                         const isRevoked = patient.access_level === 'revoked';
                         const isSelected = selectedPatientId === patient.ahp_id && !isRevoked;
 
                         return (
-                            <Tooltip title={isRevoked ? "Access revoked by patient" : ""} placement="top" key={patient.ahp_id}>
+                            <Tooltip title={isRevoked ? "Restricted: Access revoked by subject" : ""} placement="right" key={patient.ahp_id}>
                                 <ListItem
                                     button={!isRevoked}
                                     onClick={() => !isRevoked && setSelectedPatientId(patient.ahp_id)}
                                     sx={{
-                                        p: 2.5,
-                                        borderBottom: '1px solid #e5e7eb',
-                                        bgcolor: isSelected ? '#f0fdfa' : 'white', // light teal if selected
-                                        opacity: isRevoked ? 0.4 : 1,
-                                        cursor: isRevoked ? 'not-allowed' : 'pointer',
+                                        mx: 2,
+                                        my: 1,
+                                        borderRadius: '24px',
+                                        p: 3,
+                                        bgcolor: isSelected ? 'rgba(13, 148, 136, 0.1)' : 'transparent',
+                                        border: isSelected ? '1px solid rgba(13, 148, 136, 0.3)' : '1px solid transparent',
+                                        opacity: isRevoked ? 0.3 : 1,
+                                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                                         '&:hover': {
-                                            bgcolor: isRevoked ? 'white' : isSelected ? '#ccfbf1' : '#f9fafb'
+                                            bgcolor: isRevoked ? 'transparent' : 'rgba(255,255,255,0.03)',
+                                            transform: isRevoked ? 'none' : 'translateX(8px)'
                                         }
                                     }}
                                 >
-                                    {/* Status Dot */}
-                                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#10b981', mr: 2, flexShrink: 0 }} />
-
-                                    {/* Avatar */}
-                                    <Avatar sx={{ bgcolor: isRevoked ? '#9ca3af' : '#0d9488', width: 48, height: 48, mr: 2, fontWeight: 'bold' }}>
+                                    {/* Medical Avatar */}
+                                    <Avatar sx={{ 
+                                        bgcolor: isSelected ? '#0d9488' : 'rgba(255,255,255,0.05)', 
+                                        color: isSelected ? '#fff' : '#6366f1', 
+                                        width: 56, 
+                                        height: 56, 
+                                        mr: 3, 
+                                        fontWeight: 900,
+                                        fontFamily: 'Outfit',
+                                        border: '1px solid rgba(255,255,255,0.05)',
+                                        boxShadow: isSelected ? '0 0 20px rgba(13, 148, 136, 0.2)' : 'none'
+                                    }}>
                                         {patient.name.split(' ').map(n => n[0]).join('')}
                                     </Avatar>
 
-                                    {/* Details */}
+                                    {/* Data Cluster */}
                                     <Box sx={{ flex: 1 }}>
-                                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#111827', lineHeight: 1.2 }}>
+                                        <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 800, fontFamily: 'Outfit', mb: 0.2 }}>
                                             {patient.name}
                                         </Typography>
-                                        <Typography variant="caption" sx={{ color: '#6b7280', display: 'block', mb: 0.5 }}>
-                                            AHP Patient · <span style={{ fontFamily: 'monospace' }}>{patient.ahp_id}</span>
+                                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontWeight: 800, mb: 1, letterSpacing: 0.5, fontFamily: 'monospace' }}>
+                                            {patient.ahp_id}
                                         </Typography>
 
-                                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                                        <Box sx={{ display: 'flex', gap: 1.5 }}>
                                             {isRevoked ? (
-                                                <Chip size="small" label="Access revoked" sx={{ bgcolor: '#e5e7eb', color: '#4b5563', height: 20, fontSize: '0.7rem' }} />
+                                                <Chip size="small" label="ACCESS REVOKED" sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontWeight: 900, height: 22, fontSize: '0.65rem' }} />
                                             ) : (
-                                                <Chip size="small" label={`Access: ${patient.access_level}`} sx={{ bgcolor: '#ccfbf1', color: '#0f766e', height: 20, fontSize: '0.7rem' }} />
+                                                <Chip size="small" label={patient.access_level.toUpperCase()} sx={{ bgcolor: 'rgba(13, 148, 136, 0.1)', color: '#0d9488', fontWeight: 900, height: 22, fontSize: '0.65rem', border: '1px solid rgba(13, 148, 136, 0.2)' }} />
                                             )}
+                                            <Chip size="small" label="STABLE" sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#64748b', fontWeight: 900, height: 22, fontSize: '0.65rem' }} />
                                         </Box>
                                     </Box>
 
-                                    {/* Date */}
-                                    <Box sx={{ alignSelf: 'flex-start', textAlign: 'right' }}>
-                                        <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                                            {new Date(patient.granted_at).toLocaleDateString()}
+                                    {/* Metadata */}
+                                    <Box sx={{ textAlign: 'right' }}>
+                                        <Typography variant="caption" sx={{ color: '#475569', fontWeight: 800, fontSize: '0.7rem' }}>
+                                            LAST SYNC
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace', mt: 0.5 }}>
+                                            {new Date(patient.granted_at).toLocaleDateString([], { month: 'short', day: '2-digit' })}
                                         </Typography>
                                     </Box>
                                 </ListItem>
                             </Tooltip>
                         );
                     })}
-                    {!isLoading && filteredPatients.length === 0 && (
-                        <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <Typography color="text.secondary">No patients found matching your search.</Typography>
-                        </Box>
-                    )}
                 </List>
             </Box>
 
-            {/* Right Pane - Mini Preview */}
-            <Box className="glass-card" sx={{ width: 380, flexShrink: 0, bgcolor: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)', display: 'flex', flexDirection: 'column' }}>
+            {/* Right Pane - Intelligence Briefing */}
+            <Box className="glass-card" sx={{ 
+                width: 420, 
+                flexShrink: 0, 
+                bgcolor: 'rgba(255,255,255,0.02)', 
+                border: '1px solid rgba(255,255,255,0.05)', 
+                display: 'flex', 
+                flexDirection: 'column',
+                borderRadius: '32px',
+                backdropFilter: 'blur(40px)',
+                overflow: 'hidden'
+            }}>
                 {!selectedPatientData ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', p: 4, textAlign: 'center' }}>
-                        <FolderSharedIcon sx={{ fontSize: 64, color: '#e5e7eb', mb: 2 }} />
-                        <Typography variant="h6" sx={{ color: '#4b5563', fontWeight: 'bold' }}>{isLoadingDetail ? "Loading profile..." : "Select a patient to view profile"}</Typography>
-                        <Typography variant="body2" sx={{ color: '#9ca3af', mt: 1 }}>
-                            {isLoadingDetail ? "Connecting to AHP network..." : "Click on any active patient from the list."}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', p: 6, textAlign: 'center' }}>
+                        <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: '30%' }}>
+                            <FolderSharedIcon sx={{ fontSize: 48, color: '#334155' }} />
+                        </Box>
+                        <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mt: 3, fontFamily: 'Outfit' }}>
+                            {isLoadingDetail ? "RETRIVING..." : "SELECT NODE"}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b', mt: 1.5, fontWeight: 500 }}>
+                            {isLoadingDetail ? "Establishing encrypted link to AHP ledger." : "Choose a valid practitioner link to view deep clinical context."}
                         </Typography>
                     </Box>
                 ) : (
                     <>
-                        <Box sx={{ p: 4, textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
-                            <Avatar sx={{ width: 80, height: 80, mx: 'auto', mb: 2, bgcolor: '#0d9488', fontSize: '2rem' }}>
+                        {/* Preview Header */}
+                        <Box sx={{ p: 5, textAlign: 'center', background: 'linear-gradient(180deg, rgba(13, 148, 136, 0.05) 0%, transparent 100%)' }}>
+                            <Avatar sx={{ 
+                                width: 100, 
+                                height: 100, 
+                                mx: 'auto', 
+                                mb: 3, 
+                                bgcolor: '#0d9488', 
+                                fontSize: '2.5rem', 
+                                fontWeight: 900,
+                                fontFamily: 'Outfit',
+                                border: '4px solid #050810',
+                                boxShadow: '0 10px 30px rgba(13, 148, 136, 0.2)'
+                            }}>
                                 {selectedPatientData.profile.name.split(' ').map(n => n[0]).join('')}
                             </Avatar>
-                            <Typography variant="h5" fontWeight="bold" sx={{ color: '#111827' }}>{selectedPatientData.profile.name}</Typography>
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 1, mb: 1 }}>
-                                <Typography variant="body2" sx={{ color: '#4b5563' }}>{selectedPatientData.profile.age}yrs</Typography>
-                                <Typography variant="body2" sx={{ color: '#4b5563' }}>•</Typography>
-                                <Typography variant="body2" sx={{ color: '#4b5563' }}>{selectedPatientData.profile.gender}</Typography>
+                            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 900, fontFamily: 'Outfit', mb: 1 }}>{selectedPatientData.profile.name}</Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mb: 2 }}>
+                                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 800 }}>{selectedPatientData.profile.age} YRS</Typography>
+                                <Typography variant="caption" sx={{ color: '#334155' }}>•</Typography>
+                                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 800 }}>{selectedPatientData.profile.gender.toUpperCase()}</Typography>
                             </Box>
-                            <Chip label={selectedPatientData.profile.ahp_id} sx={{ fontFamily: 'monospace', bgcolor: '#f3f4f6', color: '#4b5563', fontWeight: 'bold' }} />
-                        </Box>
-
-                        <Box sx={{ p: 3, flex: 1, overflowY: 'auto' }}>
-                            {/* Critical Allergies */}
-                            {selectedPatientData.allergies.length > 0 && (
-                                <Box sx={{ mb: 3 }}>
-                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                        {selectedPatientData.allergies.map(alg => (
-                                            <Chip key={alg.id} label={`${alg.allergen} Allergy`} icon={<WarningIcon fontSize="small" />} sx={{ bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 'bold' }} />
-                                        ))}
-                                    </Box>
-                                </Box>
-                            )}
-
-                            {/* Active Conditions */}
-                            {selectedPatientData.conditions.length > 0 && (
-                                <Box sx={{ mb: 3 }}>
-                                    <Typography variant="overline" sx={{ color: '#6b7280', fontWeight: 'bold', mb: 1, display: 'block' }}>Active Conditions</Typography>
-                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                        {selectedPatientData.conditions.map(cond => (
-                                            <Chip key={cond.id} label={cond.name} size="small" sx={{ bgcolor: '#ccfbf1', color: '#0f766e', fontWeight: 600 }} />
-                                        ))}
-                                    </Box>
-                                </Box>
-                            )}
-
-                            {/* Current Medications */}
-                            <Box sx={{ mb: 3 }}>
-                                <Typography variant="overline" sx={{ color: '#6b7280', fontWeight: 'bold', mb: 1, display: 'block' }}>Current Medications</Typography>
-                                {selectedPatientData.medications.length > 0 ? (
-                                    selectedPatientData.medications.map(med => (
-                                        <Box key={med.id} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                            <MedicationIcon sx={{ color: '#9ca3af', fontSize: 20, mr: 1 }} />
-                                            <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500 }}>{med.generic_name} ({med.dosage})</Typography>
-                                        </Box>
-                                    ))
-                                ) : (
-                                    <Typography variant="body2" sx={{ color: '#9ca3af' }}>None recorded</Typography>
-                                )}
+                            <Box sx={{ px: 2, py: 0.8, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: '12px', display: 'inline-block', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#0d9488', fontWeight: 800 }}>{selectedPatientData.profile.ahp_id}</Typography>
                             </Box>
                         </Box>
 
-                        <Box sx={{ p: 3, borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
+                            {/* AI Summary Extract */}
+                            <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(99, 102, 241, 0.03)', borderRadius: '20px', border: '1px solid rgba(99, 102, 241, 0.1)' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                    <InfoOutlinedIcon sx={{ fontSize: 18, color: '#6366f1' }} />
+                                    <Typography variant="caption" sx={{ color: '#6366f1', fontWeight: 900, letterSpacing: 1 }}>CORE CONTEXT</Typography>
+                                </Box>
+                                <Typography variant="body2" sx={{ color: '#94a3b8', lineHeight: 1.6, fontWeight: 500, fontFamily: 'Inter' }}>
+                                    {selectedPatientData.profile.description || "Intelligence node synthesis pending. Access full profile for deep analysis."}
+                                </Typography>
+                            </Box>
+
+                            {/* Indicators */}
+                            <Box sx={{ mb: 4 }}>
+                                <Typography variant="overline" sx={{ color: '#475569', fontWeight: 900, mb: 2, display: 'block', letterSpacing: 1 }}>CLINICAL MARKERS</Typography>
+                                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                                    {selectedPatientData.allergies.length > 0 && <Chip label="SENSITIVITIES" size="small" sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontWeight: 900, fontSize: '0.65rem' }} />}
+                                    {selectedPatientData.conditions.map(cond => (
+                                        <Chip key={cond.id} label={cond.name.toUpperCase()} size="small" sx={{ bgcolor: 'rgba(13, 148, 136, 0.05)', color: '#0d9488', fontWeight: 900, fontSize: '0.65rem', border: '1px solid rgba(13, 148, 136, 0.1)' }} />
+                                    ))}
+                                </Box>
+                            </Box>
+                        </Box>
+
+                        {/* Action Hub */}
+                        <Box sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(255,255,255,0.01)' }}>
                             <Button
                                 variant="contained"
                                 fullWidth
                                 onClick={() => navigate(`/patient/${selectedPatientData.profile.ahp_id}`)}
-                                sx={{ bgcolor: '#0d9488', '&:hover': { bgcolor: '#0f766e' }, textTransform: 'none', py: 1.2, fontWeight: 'bold' }}
+                                sx={{ 
+                                    bgcolor: '#0d9488', 
+                                    transform: 'none',
+                                    '&:hover': { bgcolor: '#0f766e', transform: 'translateY(-2px)' }, 
+                                    textTransform: 'none', 
+                                    py: 2, 
+                                    borderRadius: '16px',
+                                    fontWeight: 900,
+                                    fontSize: '1rem',
+                                    boxShadow: '0 8px 24px rgba(13, 148, 136, 0.2)',
+                                    mb: 2,
+                                    transition: 'all 0.2s'
+                                }}
                             >
-                                Open Full Profile
+                                Launch Visualizer
                             </Button>
                             <Button
                                 variant="outlined"
                                 fullWidth
                                 onClick={() => navigate('/prescriptions')}
-                                startIcon={<MedicationIcon />}
-                                sx={{ color: '#0d9488', borderColor: '#0d9488', textTransform: 'none', py: 1.2, fontWeight: 'bold' }}
+                                sx={{ 
+                                    color: '#fff', 
+                                    borderColor: 'rgba(255,255,255,0.1)', 
+                                    textTransform: 'none', 
+                                    py: 1.8, 
+                                    borderRadius: '16px',
+                                    fontWeight: 700,
+                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.2)' }
+                                }}
                             >
-                                Write Prescription
+                                Rapid Prescription
                             </Button>
                         </Box>
                     </>

@@ -9,9 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { API_BASE_URL } from '../api';
+import { SecurityUtils } from '../utils/security';
 
 export default function RegisterScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
@@ -109,8 +107,8 @@ export default function RegisterScreen({ navigation }) {
             });
 
             const ahp_id = setupResp.data.ahp_id;
-            await AsyncStorage.setItem('token', access_token);
-            await AsyncStorage.setItem('ahp_id', ahp_id);
+            await SecurityUtils.saveToken(access_token);
+            await SecurityUtils.saveAhpId(ahp_id);
 
             // Navigate to Success Screen instead of Main Dashboard
             navigation.replace('RegistrationSuccess', { ahp_id, fullName: formData.fullName });
@@ -126,9 +124,8 @@ export default function RegisterScreen({ navigation }) {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-                    {/* Welcome Section */}
                     <View style={styles.welcomeContainer}>
-                        <Image source={require('../../assets/mulajna_splash_hero.png')} style={styles.logoImage} resizeMode="contain" />
+                        <Image source={require('../../assets/icon.png')} style={styles.logoImage} resizeMode="contain" />
                         <Text style={styles.title}>Join Mulajna</Text>
                         <Text style={styles.subtitle}>Create your AI Health Passport in seconds.</Text>
                     </View>

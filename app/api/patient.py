@@ -15,7 +15,7 @@ from app.core.logging import logger
 from app.services.dashboard_service import DashboardService
 from app.services.ai_service import get_ai_service, AsyncAIService
 
-from app.services.s3_service import upload_to_s3
+from app.services.s3_service import upload_to_s3_async
 
 router = APIRouter(prefix="/patient", tags=["Patient"])
 
@@ -133,90 +133,92 @@ async def upload_report(
     db: AsyncSession = Depends(deps.get_db),
     ai: AsyncAIService = Depends(get_ai_service)
 ):
-    """Securely uploads and asynchronously processes a medical report."""
+    """Securely uploads and asynchronously processes a medical report (C1K Big Pipeline Optimized)."""
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid file type")
 
     import shutil
+    import asyncio
     from arq import create_pool
     from arq.connections import RedisSettings
+    from app.services.s3_service import upload_to_s3_async
 
-    # --- ULTIMATE RESILIENCE: Global Backpressure (CHECK EARLY) ---
+    # --- BIG PIPELINE: Global Backpressure (C1K Throttle) ---
     try:
         redis_bp = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
         current_depth = await redis_bp.llen("arq:queue")
-        if current_depth > 50:
-            logger.error(f"BACKPRESSURE_TRIPPED: Queue depth {current_depth} > threshold 50.")
+        if current_depth > 500: # Increased from 50 for Big Pipeline capacity
+            logger.error(f"PIPELINE_CONGESTION: Queue depth {current_depth} > threshold 500.")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="System is currently overloaded. Chitti is processing a backlog. Please try again in a few minutes.",
-                headers={"Retry-After": "300"}
+                detail="Chitti is analyzing a heavy backlog. Parallel pipelines are full. Please try in 2 mins.",
+                headers={"Retry-After": "120"}
             )
     except HTTPException:
         raise
     except Exception as bp_err:
-        logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}). Proceeding.")
+        logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}).")
 
     try:
-        # 1. Memory-efficient streaming to local temp file
-        os.makedirs("temp_uploads", exist_ok=True)
+        # 1. Non-blocking parallel file IO
+        await asyncio.to_thread(os.makedirs, "temp_uploads", exist_ok=True)
         safe_filename = f"{uuid.uuid4()}{ext}"
         temp_path = os.path.join("temp_uploads", safe_filename)
         
-        # Stream directly from the SpooledTemporaryFile to disk
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Async-friendly streaming from SpooledTemporaryFile to disk
+        def _save_file():
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        await asyncio.to_thread(_save_file)
 
-        # 2. Upload to InsForge S3 (Synchronous call but decoupled from analysis)
+        # 2. Async Upload to Cloud Storage (Zero-Blocking)
         s3_object_name = f"reports/{current_patient.ahp_id or 'anon'}/{safe_filename}"
-        s3_url = upload_to_s3(temp_path, s3_object_name)
+        s3_url = await upload_to_s3_async(temp_path, s3_object_name)
 
-        # 3. Create a Placeholder Record (State: Processing)
+        # 3. Create Placeholder Record
         new_record = models.MedicalRecord(
             patient_id=current_patient.id,
             type="Document",
             file_url=s3_url,
-            raw_text="[AI_PROCESSING_IN_PROGRESS]",
-            ai_summary="Your report is being analyzed by Chitti...",
-            patient_summary="Analysis in progress..."
+            raw_text="[PIPELINE_ANALYSIS_STAGED]",
+            ai_summary="Chitti is decoding your clinical data...",
+            patient_summary="Analysis staged in cloud pipeline."
         )
         db.add(new_record)
         await db.commit()
 
-        # 4. ENQUEUE TO ARQ WORKER
+        # 4. ENQUEUE TO ARQ WORKER (Parallel Flow)
         try:
             redis = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
-
             job = await redis.enqueue_job('process_medical_document_task', new_record.id, s3_object_name)
             job_id = job.job_id
         except Exception as queue_err:
             logger.error(f"QUEUE_ERROR: {queue_err}")
             job_id = "no_queue"
 
-        # Cleanup temp file locally
-        try: os.remove(temp_path)
-        except: pass
+        # Non-blocking cleanup
+        await asyncio.to_thread(os.remove, temp_path)
 
         await log_audit_action(
             db, 
-            "REPORT_UPLOADED_FOR_ANALYSIS", 
+            "REPORT_STAGED_IN_PIPELINE", 
             user_id=current_patient.user_id, 
             resource_type="MEDICAL_RECORD",
-            details={"record_id": new_record.id, "job_id": job_id}
+            details={"record_id": new_record.id, "job_id": job_id, "node": os.getenv("HOSTNAME", "node-1")}
         )
         
         return {
             "status": "processing",
             "record_id": new_record.id,
             "job_id": job_id,
-            "message": "Analysis started in background.",
+            "message": "Clinical data successfully staged in parallel pipeline.",
             "url": s3_url
         }
 
     except Exception as e:
-        logger.error(f"UPLOAD_ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        logger.error(f"PIPELINE_FAILURE: {str(e)}")
+        raise HTTPException(status_code=500, detail="Clinical pipeline failure. Incident logged.")
 
 @router.post("/confirm-and-save-report")
 async def confirm_report(

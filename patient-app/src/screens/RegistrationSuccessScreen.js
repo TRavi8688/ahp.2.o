@@ -1,15 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Share, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
+import { Theme, GlobalStyles } from '../theme';
 
 export default function RegistrationSuccessScreen({ navigation, route }) {
     const { ahp_id, fullName } = route.params || { ahp_id: 'AHP-IN-XXXX-XXXX-XX', fullName: 'Patient' };
 
     const copyToClipboard = async () => {
         await Clipboard.setStringAsync(ahp_id);
-        // In a real app we'd show a toast here
     };
 
     const onShare = async () => {
@@ -23,55 +18,54 @@ export default function RegistrationSuccessScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
+        <View style={[styles.container, { backgroundColor: Theme.colors.background }]}>
+            <LinearGradient colors={['#050810', '#1E1B4B']} style={styles.header}>
                 <View style={styles.successIcon}>
-                    <Ionicons name="checkmark-circle" size={80} color="#fff" />
+                    <Ionicons name="checkmark-circle" size={80} color={Theme.colors.primary} />
                 </View>
                 <Text style={styles.welcomeText}>Welcome to Mulajna,</Text>
-                <Text style={styles.nameText}>{fullName}!</Text>
+                <Text style={[styles.nameText, GlobalStyles.heading]}>{fullName}!</Text>
                 <Text style={styles.subtitle}>Your AI Health Passport is ready.</Text>
             </LinearGradient>
 
             <View style={styles.content}>
-                <View style={styles.idCard}>
+                <View style={[styles.idCard, GlobalStyles.glass]}>
                     <Text style={styles.idLabel}>YOUR UNIQUE AHP ID</Text>
                     <View style={styles.idRow}>
-                        <Text style={styles.idValue}>{ahp_id}</Text>
+                        <Text style={[styles.idValue, { color: '#fff' }]}>{ahp_id}</Text>
                         <TouchableOpacity onPress={copyToClipboard} style={styles.copyBtn}>
-                            <Ionicons name="copy-outline" size={20} color="#4c1d95" />
+                            <Ionicons name="copy-outline" size={20} color={Theme.colors.primary} />
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.qrContainer}>
-                        {/* Placeholder for QR Code - In real app use react-native-qrcode-svg */}
-                        <View style={styles.qrPlaceholder}>
-                            <Ionicons name="qr-code-outline" size={120} color="#4c1d95" />
-                            <Text style={styles.qrText}>Scan to Connect</Text>
+                        <View style={[styles.qrPlaceholder, { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.1)' }]}>
+                            <Ionicons name="qr-code-outline" size={120} color={Theme.colors.primary} />
+                            <Text style={[styles.qrText, { color: Theme.colors.secondary }]}>Scan to Connect</Text>
                         </View>
                     </View>
                 </View>
 
                 <View style={styles.benefitSection}>
-                    <Text style={styles.benefitTitle}>What's Next?</Text>
+                    <Text style={[styles.benefitTitle, { color: '#fff' }]}>What's Next?</Text>
                     <View style={styles.benefitItem}>
-                        <Ionicons name="cloud-upload-outline" size={24} color="#4c1d95" />
-                        <Text style={styles.benefitText}>Upload your medical reports for AI analysis.</Text>
+                        <Ionicons name="cloud-upload-outline" size={24} color={Theme.colors.primary} />
+                        <Text style={[styles.benefitText, { color: '#94A3B8' }]}>Upload your medical reports for AI analysis.</Text>
                     </View>
                     <View style={styles.benefitItem}>
-                        <Ionicons name="people-outline" size={24} color="#4c1d95" />
-                        <Text style={styles.benefitText}>Share your AHP ID with doctors for instant consultation.</Text>
+                        <Ionicons name="people-outline" size={24} color={Theme.colors.primary} />
+                        <Text style={[styles.benefitText, { color: '#94A3B8' }]}>Share your AHP ID with doctors for instant consultation.</Text>
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.mainButton} onPress={() => navigation.replace('MainTabs')}>
+                <TouchableOpacity style={[styles.mainButton, { backgroundColor: Theme.colors.primary }]} onPress={() => navigation.replace('MainTabs')}>
                     <Text style={styles.mainButtonText}>Go to Dashboard</Text>
                     <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 10 }} />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.shareButton} onPress={onShare}>
-                    <Ionicons name="share-social-outline" size={20} color="#4c1d95" />
-                    <Text style={styles.shareButtonText}>Share Passport</Text>
+                    <Ionicons name="share-social-outline" size={20} color={Theme.colors.secondary} />
+                    <Text style={[styles.shareButtonText, { color: Theme.colors.secondary }]}>Share Passport</Text>
                 </TouchableOpacity>
             </View>
         </View>

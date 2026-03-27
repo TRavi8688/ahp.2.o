@@ -3,11 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, I
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSocket } from '../contexts/SocketContext';
-
-import { API_BASE_URL } from '../api';
-import CircularProgress from '../components/CircularProgress';
+import { SecurityUtils } from '../utils/security';
+import { Theme, GlobalStyles } from '../theme';
 
 export default function HomeScreen({ navigation }) {
     const [profile, setProfile] = useState(null);
@@ -21,7 +18,7 @@ export default function HomeScreen({ navigation }) {
 
     const fetchData = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             if (!token) {
                 navigation.replace('Login');
                 return;
@@ -68,7 +65,7 @@ export default function HomeScreen({ navigation }) {
         if (!consentData) return;
         setActionLoading(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             const endpoint = action === 'approve'
                 ? `${API_BASE_URL}/patient/approve-access/${consentData.access_id}`
                 : `${API_BASE_URL}/patient/revoke-access/${consentData.access_id}`;
@@ -95,7 +92,8 @@ export default function HomeScreen({ navigation }) {
     if (loading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: '#4c1d95', fontSize: 16 }}>Loading Clinical Snapshot...</Text>
+                <ActivityIndicator color={Theme.colors.primary} />
+                <Text style={{ color: '#4c1d95', fontSize: 16, marginTop: 10, fontFamily: Theme.fonts.label }}>INITIALIZING SNAPSHOT...</Text>
             </View>
         );
     }
@@ -106,19 +104,19 @@ export default function HomeScreen({ navigation }) {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4c1d95" />}
         >
             {/* 1. Patient Header */}
-            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
+            <LinearGradient colors={['#050810', '#1E1B4B']} style={styles.header}>
                 <View style={styles.headerContent}>
                     <View style={styles.profileRow}>
-                        <View style={styles.avatar}>
-                            <Ionicons name="person" size={30} color="#7c3aed" />
+                        <View style={[styles.avatar, GlobalStyles.glass]}>
+                            <Ionicons name="person" size={30} color="#fff" />
                         </View>
                         <View style={styles.headerText}>
-                            <Text style={styles.userName}>{summary?.patient_name || profile?.full_name || 'Patient'}</Text>
+                            <Text style={[styles.userName, GlobalStyles.heading]}>{summary?.patient_name || profile?.full_name || 'Patient'}</Text>
                             <Text style={styles.patientSub}>
-                                Age: {summary?.age || profile?.age || 'N/A'} | Blood Group: {summary?.blood_group || profile?.blood_group || 'N/A'}
+                                Age: {summary?.age || profile?.age || 'N/A'} | {summary?.blood_group || profile?.blood_group || 'N/A'}
                             </Text>
-                            <View style={styles.idBadge}>
-                                <Text style={styles.idText}>ID: {summary?.ahp_id || profile?.ahp_id}</Text>
+                            <View style={[styles.idBadge, GlobalStyles.glass]}>
+                                <Text style={styles.idText}>MULAJNA ID: {summary?.ahp_id || profile?.ahp_id}</Text>
                             </View>
                         </View>
                     </View>
@@ -128,19 +126,19 @@ export default function HomeScreen({ navigation }) {
                 </View>
 
                 {/* 1b. AI Health Summary */}
-                <View style={styles.summaryCard}>
+                <View style={[styles.summaryCard, GlobalStyles.glass]}>
                     <View style={{ flexDirection: 'row', gap: 20, alignItems: 'center' }}>
                          <View style={{ flex: 1 }}>
                             <View style={styles.summaryBadge}>
                                 <Ionicons name="sparkles" size={14} color="#fff" />
-                                <Text style={styles.summaryBadgeText}>AI CLINICAL INSIGHT</Text>
+                                <Text style={styles.summaryBadgeText}>CHITTI CLINICAL INSIGHT</Text>
                             </View>
                             <Text style={styles.summaryText} numberOfLines={4}>
                                 {summary?.summary || 'No clinical summary available. Upload a medical record to allow Chitti AI to analyze your health.'}
                             </Text>
                          </View>
                     </View>
-                    <Text style={styles.lastUpdate}>Last Updated: {summary?.last_update || 'Today'}</Text>
+                    <Text style={styles.lastUpdate}>SYNCED: {summary?.last_update || 'LIVE'}</Text>
                 </View>
             </LinearGradient>
 

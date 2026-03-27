@@ -9,12 +9,23 @@ import MyRecordsScreen from '../screens/MyRecordsScreen';
 import ChittiAiScreen from '../screens/ChittiAiScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
+import * as Haptics from 'expo-haptics';
+
 const Tab = createBottomTabNavigator();
 
 export default function MainTabs() {
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
+                tabBarButton: (props) => (
+                    <TouchableOpacity
+                        {...props}
+                        onPress={(e) => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            props.onPress(e);
+                        }}
+                    />
+                ),
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
 

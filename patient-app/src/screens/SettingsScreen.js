@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-
-import { API_BASE_URL } from '../api';
+import { SecurityUtils } from '../utils/security';
+import * as Haptics from 'expo-haptics';
 
 export default function SettingsScreen({ navigation }) {
     const [profile, setProfile] = useState(null);
@@ -19,12 +17,12 @@ export default function SettingsScreen({ navigation }) {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const token = await AsyncStorage.getItem('token');
+                const token = await SecurityUtils.getToken();
                 const response = await axios.get(`${API_BASE_URL}/patient/profile`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setProfile(response.data);
-                const storedAhp = await AsyncStorage.getItem('ahp_id');
+                const storedAhp = await SecurityUtils.getAhpId();
                 setAhpId(storedAhp || '');
             } catch (err) {
                 console.log("Settings fetch error", err);
@@ -34,13 +32,14 @@ export default function SettingsScreen({ navigation }) {
     }, []);
 
     const handleLogout = async () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        Alert.alert('Logout', 'Are you sure you want to logout from Mulajna?', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Logout',
                 style: 'destructive',
                 onPress: async () => {
-                    await AsyncStorage.removeItem('token');
+                    await SecurityUtils.deleteToken();
                     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
                 }
             }
@@ -52,12 +51,12 @@ export default function SettingsScreen({ navigation }) {
         if (newPassword !== confirmPassword) return Alert.alert('Mismatch', 'Passwords do not match.');
         setIsSavingPw(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             const resp = await axios.post(`${API_BASE_URL}/patient/set-password`, { password: newPassword }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = resp.data;
-            await AsyncStorage.setItem('ahp_id', data.ahp_id || '');
+            await SecurityUtils.saveAhpId(data.ahp_id || '');
             setAhpId(data.ahp_id || '');
             setShowPasswordModal(false);
             setNewPassword('');

@@ -94,66 +94,127 @@ export default function Sidebar({ onOpenScan }) {
                 '& .MuiDrawer-paper': {
                     width: drawerWidth,
                     boxSizing: 'border-box',
-                    backgroundColor: '#111827', // Very Dark per spec, but we keep light theme elsewhere if needed, though sidebar can be dark. Using a rich dark tone.
-                    color: '#e5e7eb'
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    backdropFilter: 'blur(30px)',
+                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                    color: '#f8fafc',
+                    margin: '10px 0 10px 10px',
+                    height: 'calc(100% - 20px)',
+                    borderRadius: '24px',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)'
                 },
             }}
         >
             <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Box sx={{ width: 32, height: 32, bgcolor: '#0d9488', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 1 }}>
-                        <Typography sx={{ color: 'white', fontWeight: 'bold' }}>⚕</Typography>
+                    <Box sx={{ 
+                        width: 40, 
+                        height: 40, 
+                        background: 'linear-gradient(135deg, #0d9488 0%, #064e4b 100%)', 
+                        borderRadius: '12px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        mr: 1.5,
+                        boxShadow: '0 4px 15px rgba(13, 148, 136, 0.3)'
+                    }}>
+                        <Typography sx={{ color: 'white', fontWeight: 'bold', fontSize: '1.4rem' }}>⚕</Typography>
                     </Box>
-                    <Typography variant="h6" fontWeight="bold" color="white">AHP Doctor</Typography>
+                    <Typography 
+                        variant="h6" 
+                        sx={{ 
+                            fontWeight: 800, 
+                            letterSpacing: '-0.03em',
+                            background: 'linear-gradient(to right, #fff, #94a3b8)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent'
+                        }}
+                    >
+                        MULAJNA
+                    </Typography>
                 </Box>
-                <Typography variant="caption" sx={{ color: '#9ca3af', mb: 3 }}>Clinical Portal</Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', mb: 3, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    Surgeon Portal
+                </Typography>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1.5, bgcolor: 'rgba(255,255,255,0.05)', p: 1.5, borderRadius: 2 }}>
+                <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    width: '100%', 
+                    gap: 1.5, 
+                    bgcolor: 'rgba(255,255,255,0.03)', 
+                    p: 2, 
+                    borderRadius: '18px',
+                    border: '1px solid rgba(255,255,255,0.05)'
+                }}>
                     <Box sx={{ position: 'relative' }}>
-                        <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Typography fontWeight="bold" color="white">
-                                {profile ? `${profile.first_name?.[0] || 'D'}${profile.last_name?.[0] || 'R'}` : '...'}
+                        <Box sx={{ 
+                            width: 44, 
+                            height: 44, 
+                            borderRadius: '14px', 
+                            background: 'linear-gradient(45deg, #3b82f6 0%, #1d4ed8 100%)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                        }}>
+                            <Typography fontWeight="bold" color="white" sx={{ fontSize: '1rem' }}>
+                                {profile ? `${profile.first_name?.[0] || 'D'}${profile.last_name?.[0] || 'R'}` : 'DR'}
                             </Typography>
                         </Box>
-                        <Box sx={{ position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, bgcolor: '#22c55e', borderRadius: '50%', border: '2px solid #111827' }} />
+                        <Box sx={{ position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, bgcolor: '#22c55e', borderRadius: '50%', border: '2.5px solid #050810' }} />
                     </Box>
                     <Box sx={{ textAlign: 'left', flex: 1, overflow: 'hidden' }}>
-                        <Typography variant="subtitle2" color="white" fontWeight="bold" noWrap>
-                            {profile ? `Dr. ${profile.last_name}` : 'Loading...'}
+                        <Typography variant="subtitle2" color="white" fontWeight="800" noWrap sx={{ fontSize: '0.85rem' }}>
+                            {profile ? `Dr. ${profile.last_name}` : 'Admin'}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: '#9ca3af' }} noWrap>
-                            {profile ? profile.specialty : 'Verified Practitioner'}
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }} noWrap>
+                            {profile ? profile.specialty : 'Verified Lead'}
                         </Typography>
                     </Box>
                 </Box>
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mx: 2 }} />
 
-            <List sx={{ px: 2, flexGrow: 1, overflowY: 'auto' }}>
+            <List sx={{ px: 1.5, flexGrow: 1, overflowY: 'auto', mt: 2 }}>
                 {menuSections.map((section, idx) => (
-                    <Box key={idx} sx={{ mb: 2 }}>
-                        {/* Section Header */}
-                        {/* <Typography variant="overline" sx={{ color: '#6b7280', px: 2, display: 'block', mb: 0.5, fontWeight: 600 }}>{section.title}</Typography> */}
+                    <Box key={idx} sx={{ mb: 3 }}>
+                        <Typography variant="caption" sx={{ color: '#334155', px: 2, display: 'block', mb: 1.5, fontWeight: 800, letterSpacing: '0.05em' }}>
+                            {section.title.toUpperCase()}
+                        </Typography>
                         {section.items.map((item) => (
                             <ListItem
                                 button
                                 key={item.text}
                                 onClick={() => item.action ? item.action() : navigate(item.path)}
                                 sx={{
-                                    mb: 0.5,
-                                    borderRadius: 1.5,
-                                    py: 1,
-                                    backgroundColor: location.pathname === item.path ? 'rgba(13, 148, 136, 0.15)' : 'transparent',
-                                    borderLeft: location.pathname === item.path ? '3px solid #0d9488' : '3px solid transparent',
+                                    mb: 0.8,
+                                    borderRadius: '14px',
+                                    py: 1.2,
+                                    backgroundColor: location.pathname === item.path ? 'rgba(13, 148, 136, 0.08)' : 'transparent',
+                                    border: location.pathname === item.path ? '1px solid rgba(13, 148, 136, 0.2)' : '1px solid transparent',
+                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     '&:hover': {
-                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        backgroundColor: 'rgba(255,255,255,0.05)',
+                                        transform: 'translateX(4px)'
                                     }
                                 }}
                             >
-                                <ListItemIcon sx={{ color: location.pathname === item.path ? '#0d9488' : '#9ca3af', minWidth: 36 }}>
+                                <ListItemIcon sx={{ color: location.pathname === item.path ? '#0d9488' : '#64748b', minWidth: 40 }}>
                                     {item.badge ? (
-                                        <Badge badgeContent={item.badge} color={item.badgeColor || "primary"} sx={{ '& .MuiBadge-badge': { right: -3, top: 3 } }}>
+                                        <Badge 
+                                            badgeContent={item.badge} 
+                                            color={item.badgeColor || "primary"} 
+                                            sx={{ 
+                                                '& .MuiBadge-badge': { 
+                                                    right: -3, 
+                                                    top: 3, 
+                                                    background: item.badgeColor === 'error' ? '#ef4444' : '#0d9488',
+                                                    boxShadow: '0 0 10px rgba(0,0,0,0.5)'
+                                                } 
+                                            }}
+                                        >
                                             {item.icon}
                                         </Badge>
                                     ) : item.icon}
@@ -161,9 +222,11 @@ export default function Sidebar({ onOpenScan }) {
                                 <ListItemText
                                     primary={item.text}
                                     primaryTypographyProps={{
-                                        variant: 'body2',
-                                        fontWeight: location.pathname === item.path ? 600 : 400,
-                                        color: location.pathname === item.path ? '#fff' : '#d1d5db'
+                                        variant: 'caption',
+                                        fontWeight: location.pathname === item.path ? 700 : 500,
+                                        color: location.pathname === item.path ? '#fff' : '#94a3b8',
+                                        letterSpacing: '0.02em',
+                                        sx: { fontSize: '0.8rem' }
                                     }}
                                 />
                             </ListItem>
@@ -172,15 +235,28 @@ export default function Sidebar({ onOpenScan }) {
                 ))}
             </List>
 
-            <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <Box sx={{ p: 2.5, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <Button
                     fullWidth
                     color="error"
-                    variant="text"
+                    variant="contained"
                     startIcon={<WarningAmberIcon />}
-                    sx={{ justifyContent: 'flex-start', color: '#ef4444', fontWeight: 'bold' }}
+                    sx={{ 
+                        justifyContent: 'center', 
+                        bgcolor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444', 
+                        fontWeight: 800,
+                        borderRadius: '14px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        py: 1.2,
+                        '&:hover': {
+                            bgcolor: '#ef4444',
+                            color: 'white',
+                            boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
+                        }
+                    }}
                 >
-                    Emergency Lookup
+                    Emergency Rescue
                 </Button>
             </Box>
         </Drawer>

@@ -7,11 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
-
-import { API_BASE_URL } from '../api';
+import { SecurityUtils } from '../utils/security';
+import { Theme, GlobalStyles } from '../theme';
+import * as Haptics from 'expo-haptics';
 
 export default function MyRecordsScreen({ navigation }) {
     const [records, setRecords] = useState([]);
@@ -27,11 +25,12 @@ export default function MyRecordsScreen({ navigation }) {
 
     const fetchRecords = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             const response = await axios.get(`${API_BASE_URL}/patient/records`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
+            // Hidden records are fine in AsyncStorage as they aren't sensitive auth data
             const hiddenIdsStr = await AsyncStorage.getItem('hidden_records');
             const hiddenIds = hiddenIdsStr ? JSON.parse(hiddenIdsStr) : [];
             const visibleRecords = response.data.filter(r => !hiddenIds.includes(r.id));
@@ -51,11 +50,13 @@ export default function MyRecordsScreen({ navigation }) {
     );
 
     const openRecord = (record) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setSelectedRecord(record);
         setShowDetail(true);
     };
 
     const handleUpload = async (type) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         try {
             let result;
             if (type === 'camera') {
@@ -82,7 +83,7 @@ export default function MyRecordsScreen({ navigation }) {
         setUploadProgress(10);
 
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             const formData = new FormData();
 
             const fileUri = file.uri;
@@ -122,9 +123,11 @@ export default function MyRecordsScreen({ navigation }) {
 
             setUploadProgress(100);
             if (uploadResponse.data.status === 'success') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 setAnalysisData(uploadResponse.data);
                 setShowAnalysis(true);
             } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                 Alert.alert('Analysis Failed', uploadResponse.data.message || 'Chitti could not read this document.');
             }
         } catch (error) {
@@ -138,8 +141,9 @@ export default function MyRecordsScreen({ navigation }) {
     };
 
     const confirmSave = async (shouldUpdateProfile) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             await axios.post(`${API_BASE_URL}/patient/confirm-and-save-report`, {
                 analysis: {
                     structured_data: analysisData.extracted_data,

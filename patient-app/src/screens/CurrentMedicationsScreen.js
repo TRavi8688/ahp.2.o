@@ -1,11 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { API_BASE_URL } from '../api';
+import { SecurityUtils } from '../utils/security';
+import { Theme, GlobalStyles } from '../theme';
 
 export default function CurrentMedicationsScreen({ navigation, route }) {
     const [meds, setMeds] = useState([]);
@@ -42,7 +36,8 @@ export default function CurrentMedicationsScreen({ navigation, route }) {
             const response = await axios.post(`${API_BASE_URL}/profile/setup`, payload);
 
             if (response.data && response.data.access_token) {
-                await AsyncStorage.setItem('token', response.data.access_token);
+                await SecurityUtils.saveToken(response.data.access_token);
+                await SecurityUtils.saveAhpId(response.data.ahp_id || '');
                 navigation.replace('MainTabs');
             } else {
                 Alert.alert("Error", "Registration failed. No token received.");
@@ -54,32 +49,33 @@ export default function CurrentMedicationsScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
-                <Text style={styles.headerTitle}>Current Medications</Text>
+        <View style={[styles.container, { backgroundColor: Theme.colors.background }]}>
+            <LinearGradient colors={['#050810', '#1E1B4B']} style={styles.header}>
+                <Text style={[styles.headerTitle, GlobalStyles.heading]}>Current Medications</Text>
                 <Text style={styles.headerSubtitle}>Do you take any daily medicines?</Text>
             </LinearGradient>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.inputRow}>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff' }]}
                         placeholder="Medicine name (e.g. Lipitor)"
+                        placeholderTextColor="#94A3B8"
                         value={currentMed}
                         onChangeText={setCurrentMed}
                     />
-                    <TouchableOpacity style={styles.addButton} onPress={addMed}>
+                    <TouchableOpacity style={[styles.addButton, { backgroundColor: Theme.colors.primary }]} onPress={addMed}>
                         <Ionicons name="add" size={30} color="#fff" />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.list}>
                     {meds.map((m, i) => (
-                        <View key={i} style={styles.medItem}>
-                            <View style={styles.medIcon}>
-                                <Ionicons name="medkit-outline" size={20} color="#4c1d95" />
+                        <View key={i} style={[styles.medItem, GlobalStyles.glass, { marginBottom: 10 }]}>
+                            <View style={[styles.medIcon, { backgroundColor: 'rgba(99, 102, 241, 0.1)' }]}>
+                                <Ionicons name="medkit-outline" size={20} color={Theme.colors.primary} />
                             </View>
-                            <Text style={styles.medText}>{m}</Text>
+                            <Text style={[styles.medText, { color: '#fff' }]}>{m}</Text>
                             <TouchableOpacity onPress={() => removeMed(i)}>
                                 <Ionicons name="trash-outline" size={20} color="#dc2626" />
                             </TouchableOpacity>
@@ -87,7 +83,7 @@ export default function CurrentMedicationsScreen({ navigation, route }) {
                     ))}
                 </View>
 
-                <TouchableOpacity style={styles.button} onPress={handleFinish}>
+                <TouchableOpacity style={[styles.button, { backgroundColor: Theme.colors.primary }]} onPress={handleFinish}>
                     <Text style={styles.buttonText}>Finish Setup</Text>
                     <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginLeft: 10 }} />
                 </TouchableOpacity>
@@ -101,30 +97,24 @@ export default function CurrentMedicationsScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { flex: 1 },
     header: { padding: 40, paddingTop: 60, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-    headerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
-    headerSubtitle: { color: '#ddd', fontSize: 16, marginTop: 5 },
+    headerTitle: { color: '#fff', fontSize: 24 },
+    headerSubtitle: { color: '#94A3B8', fontSize: 14, marginTop: 5 },
     content: { padding: 25 },
     inputRow: { flexDirection: 'row', marginBottom: 25 },
-    input: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 12, padding: 15, fontSize: 16, marginRight: 10 },
-    addButton: { backgroundColor: '#4c1d95', width: 55, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    input: { flex: 1, borderRadius: 12, padding: 15, fontSize: 16, marginRight: 10 },
+    addButton: { width: 55, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     list: { marginBottom: 30 },
     medItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
         padding: 15,
         borderRadius: 12,
-        marginBottom: 10,
-        elevation: 2,
-        shadowOpacity: 0.1,
-        shadowRadius: 5
     },
-    medIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#f5f3ff', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-    medText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#374151' },
+    medIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    medText: { flex: 1, fontSize: 15, fontWeight: '600' },
     button: {
-        backgroundColor: '#4c1d95',
         height: 55,
         borderRadius: 15,
         flexDirection: 'row',
@@ -133,5 +123,5 @@ const styles = StyleSheet.create({
     },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
     skipButton: { marginTop: 20, alignItems: 'center' },
-    skipText: { color: '#6b7280', fontSize: 14 },
+    skipText: { color: '#94A3B8', fontSize: 14 },
 });

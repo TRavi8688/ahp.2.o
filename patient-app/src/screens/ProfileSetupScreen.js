@@ -1,7 +1,4 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Theme, GlobalStyles } from '../theme';
 
 export default function ProfileSetupScreen({ navigation, route }) {
     const [formData, setFormData] = useState({
@@ -16,9 +13,9 @@ export default function ProfileSetupScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
-                <Text style={styles.headerTitle}>Account Setup</Text>
+        <View style={[styles.container, { backgroundColor: Theme.colors.background }]}>
+            <LinearGradient colors={['#050810', '#1E1B4B']} style={styles.header}>
+                <Text style={[styles.headerTitle, GlobalStyles.heading]}>Account Setup</Text>
                 <Text style={styles.headerSubtitle}>Let's build your health profile</Text>
             </LinearGradient>
 

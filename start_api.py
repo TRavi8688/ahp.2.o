@@ -7,4 +7,4 @@ if __name__ == "__main__":
     setup_logging()
     port = int(os.getenv("PORT", 8000))
     # API only requires 1 worker in many cloud envs, but can scale vertically
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False, workers=4)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False, workers=1)

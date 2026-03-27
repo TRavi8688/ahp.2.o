@@ -1,7 +1,4 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Theme, GlobalStyles } from '../theme';
 
 export default function MedicalHistoryScreen({ navigation, route }) {
     const [selected, setSelected] = useState([]);
@@ -20,9 +17,9 @@ export default function MedicalHistoryScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.header}>
-                <Text style={styles.headerTitle}>Medical History</Text>
+        <View style={[styles.container, { backgroundColor: Theme.colors.background }]}>
+            <LinearGradient colors={['#050810', '#1E1B4B']} style={styles.header}>
+                <Text style={[styles.headerTitle, GlobalStyles.heading]}>Medical History</Text>
                 <Text style={styles.headerSubtitle}>Do you have any existing conditions?</Text>
             </LinearGradient>
 
@@ -31,17 +28,21 @@ export default function MedicalHistoryScreen({ navigation, route }) {
                     {conditions.map(c => (
                         <TouchableOpacity
                             key={c}
-                            style={[styles.item, selected.includes(c) && styles.selectedItem]}
+                            style={[
+                                styles.item, 
+                                GlobalStyles.glass,
+                                selected.includes(c) && { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary }
+                            ]}
                             onPress={() => toggle(c)}
                         >
-                            <Text style={[styles.itemText, selected.includes(c) && styles.selectedText]}>{c}</Text>
+                            <Text style={[styles.itemText, { color: '#fff' }, selected.includes(c) && { fontWeight: 'bold' }]}>{c}</Text>
                             {selected.includes(c) && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
                         </TouchableOpacity>
                     ))}
                 </View>
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={[styles.button, { backgroundColor: Theme.colors.primary }]}
                     onPress={() => navigation.navigate('CurrentMedications', { ...route.params, conditions: selected })}
                 >
                     <Text style={styles.buttonText}>Continue</Text>
@@ -53,27 +54,25 @@ export default function MedicalHistoryScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { flex: 1 },
     header: { padding: 40, paddingTop: 60, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-    headerTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
-    headerSubtitle: { color: '#ddd', fontSize: 16, marginTop: 5 },
+    headerTitle: { color: '#fff', fontSize: 24 },
+    headerSubtitle: { color: '#94A3B8', fontSize: 14, marginTop: 5 },
     content: { padding: 25 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 30 },
     item: {
         width: '47%',
-        backgroundColor: '#f3f4f6',
         padding: 20,
         borderRadius: 15,
         marginBottom: 15,
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)'
     },
-    selectedItem: { backgroundColor: '#4c1d95' },
-    itemText: { fontSize: 14, color: '#374151', fontWeight: '600' },
-    selectedText: { color: '#fff' },
+    itemText: { fontSize: 14 },
     button: {
-        backgroundColor: '#4c1d95',
         height: 55,
         borderRadius: 15,
         flexDirection: 'row',

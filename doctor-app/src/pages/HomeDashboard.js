@@ -64,14 +64,27 @@ export default function HomeDashboard({ onOpenScan }) {
     const urgentAlertsCount = stats.alerts_count;
 
     return (
-        <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+        <Box sx={{ maxWidth: 1400, mx: 'auto', px: 2, pt: 2 }}>
             {/* Header */}
             <Box sx={{ mb: 4 }}>
-                <Typography variant="h4" fontWeight="bold" sx={{ color: '#fff' }}>
-                    Good afternoon, {profile ? `Dr. ${profile.last_name}` : 'Doctor'}
+                <Typography 
+                    variant="h3" 
+                    sx={{ 
+                        fontWeight: 800, 
+                        color: '#fff', 
+                        fontFamily: 'Outfit', 
+                        letterSpacing: '-0.02em',
+                        background: 'linear-gradient(to right, #ffffff 0%, #94a3b8 100%)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent'
+                    }}
+                >
+                    {profile ? `Good afternoon, Dr. ${profile.last_name}` : 'Welcome, Surgeon'}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
-                    You have {appointmentsToday} consultations scheduled for today · {pendingPrescriptions} pending prescriptions · {urgentAlertsCount} urgent alerts.
+                <Typography variant="body1" sx={{ color: '#64748b', mt: 1, fontWeight: 500 }}>
+                    <span style={{ color: '#0d9488', fontWeight: 700 }}>{appointmentsToday}</span> consultations scheduled today · 
+                    <span style={{ color: '#6366f1', fontWeight: 700, marginLeft: '8px' }}>{pendingPrescriptions}</span> pending Rx · 
+                    <span style={{ color: '#ef4444', fontWeight: 700, marginLeft: '8px' }}>{urgentAlertsCount}</span> urgent alerts.
                 </Typography>
             </Box>
 
@@ -123,25 +136,25 @@ export default function HomeDashboard({ onOpenScan }) {
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {/* Left Column: Today's Appointments */}
                 <Grid item xs={12} md={7} lg={8}>
-                    <Card elevation={0} sx={{ border: '1px solid #e5e7eb', height: '100%', borderRadius: 2 }}>
-                        <Box sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb' }}>
-                            <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937' }}>Recent Consultations</Typography>
+                    <Card elevation={0} sx={{ background: 'rgba(255,255,255,0.02)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.05)', height: '100%', borderRadius: '24px' }}>
+                        <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', fontFamily: 'Outfit', letterSpacing: '-0.01em' }}>Recent Consultations</Typography>
                             <Button
                                 endIcon={<ArrowForwardIosIcon sx={{ fontSize: 12 }} />}
                                 onClick={() => navigate('/patients')}
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                                sx={{ textTransform: 'none', fontWeight: 700, px: 2, borderRadius: '12px', color: '#0d9488' }}
                             >
-                                View all
+                                Explorer All
                             </Button>
                         </Box>
                         <Box>
                             {isLoading ? (
                                 <Box sx={{ p: 4, textAlign: 'center' }}>
-                                    <Typography color="text.secondary">Loading patients...</Typography>
+                                    <Typography color="#64748b" fontWeight={600}>Loading high-fidelity data...</Typography>
                                 </Box>
                             ) : patients.length === 0 ? (
                                 <Box sx={{ p: 4, textAlign: 'center' }}>
-                                    <Typography color="text.secondary">No active patient consultations found.</Typography>
+                                    <Typography color="#64748b" fontWeight={600}>No active clinical encounters recorded today.</Typography>
                                 </Box>
                             ) : (
                                 patients.slice(0, 5).map((p) => (
@@ -149,10 +162,10 @@ export default function HomeDashboard({ onOpenScan }) {
                                         key={p.ahp_id}
                                         name={p.name}
                                         time={new Date(p.granted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        status={p.access_level === 'full' ? 'Active' : 'Restricted'}
+                                        status={p.access_level === 'full' ? 'Active Access' : 'Restricted'}
                                         statusColor="success"
                                         id={p.ahp_id}
-                                        condition="AHP Patient"
+                                        condition="Verified Patient"
                                     />
                                 ))
                             )}
@@ -163,12 +176,12 @@ export default function HomeDashboard({ onOpenScan }) {
                 {/* Right Column: Quick Actions & Stats */}
                 <Grid item xs={12} md={5} lg={4}>
                     {/* Quick Actions Card */}
-                    <Card elevation={0} sx={{ border: '1px solid #e5e7eb', mb: 3, borderRadius: 2 }}>
-                        <Box sx={{ p: 2.5, borderBottom: '1px solid #e5e7eb' }}>
-                            <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937' }}>Quick Actions</Typography>
+                    <Card elevation={0} sx={{ background: 'rgba(255,255,255,0.02)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.05)', mb: 3, borderRadius: '24px' }}>
+                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', fontFamily: 'Outfit', letterSpacing: '-0.01em' }}>Quick Actions</Typography>
                         </Box>
-                        <Box sx={{ p: 2 }}>
-                            <Grid container spacing={1.5}>
+                        <Box sx={{ p: 2.5 }}>
+                            <Grid container spacing={2}>
                                 <Grid item xs={6}>
                                     <QuickActionButton
                                         label="Scan QR"
@@ -182,23 +195,23 @@ export default function HomeDashboard({ onOpenScan }) {
                                         label="Write Rx"
                                         icon={<MedicationIcon />}
                                         onClick={() => navigate('/prescriptions')}
-                                        color="#3b82f6"
+                                        color="#6366f1"
                                     />
                                 </Grid>
                                 <Grid item xs={6}>
                                     <QuickActionButton
                                         label="Emergency"
                                         icon={<LocalHospitalIcon />}
-                                        onClick={() => { }} // TODO: implement emergency lookup
+                                        onClick={() => { }} 
                                         color="#ef4444"
                                     />
                                 </Grid>
                                 <Grid item xs={6}>
                                     <QuickActionButton
-                                        label="Records"
+                                        label="Vault"
                                         icon={<FolderSharedIcon />}
                                         onClick={() => navigate('/history')}
-                                        color="#6366f1"
+                                        color="#8b5cf6"
                                     />
                                 </Grid>
                             </Grid>
@@ -206,23 +219,23 @@ export default function HomeDashboard({ onOpenScan }) {
                     </Card>
 
                     {/* Today's Patient Stats Card */}
-                    <Card elevation={0} sx={{ border: '1px solid #e5e7eb', borderRadius: 2 }}>
-                        <Box sx={{ p: 2.5, borderBottom: '1px solid #e5e7eb' }}>
-                            <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937' }}>Today's Stats</Typography>
+                    <Card elevation={0} sx={{ background: 'rgba(255,255,255,0.02)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px' }}>
+                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', fontFamily: 'Outfit', letterSpacing: '-0.01em' }}>Real-time Stats</Typography>
                         </Box>
-                        <Box sx={{ p: 2 }}>
-                            <Grid container rowSpacing={2} columnSpacing={1}>
+                        <Box sx={{ p: 3 }}>
+                            <Grid container rowSpacing={3} columnSpacing={2}>
                                 <Grid item xs={6}>
-                                    <MiniStat label="Patients Seen" value={stats.patients_count} />
+                                    <MiniStat label="Encounters" value={stats.patients_count} />
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <MiniStat label="Allergy Flags" value={stats.alerts_count} color={stats.alerts_count > 0 ? "#ef4444" : "#111827"} />
+                                    <MiniStat label="Flags" value={stats.alerts_count} color={stats.alerts_count > 0 ? "#ef4444" : "#10b981"} />
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <MiniStat label="Rx Sent" value={stats.pending_rx_count} />
+                                    <MiniStat label="Authored Rx" value={stats.pending_rx_count} />
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <MiniStat label="Next Visit" value="Pending" />
+                                    <MiniStat label="Queue Status" value="Optimal" color="#0d9488" />
                                 </Grid>
                             </Grid>
                         </Box>
@@ -272,21 +285,28 @@ const StatCard = ({ title, value, change, color, icon }) => (
             height: '100%',
             position: 'relative',
             overflow: 'hidden',
-            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            background: 'rgba(255, 255, 255, 0.02)',
             '&:hover': {
-                transform: 'translateY(-5px)',
-                boxShadow: `0 12px 40px 0 rgba(0, 0, 0, 0.2), 0 0 20px rgba(13, 148, 136, 0.2)`,
-                borderColor: 'rgba(255, 255, 255, 0.5)',
+                transform: 'translateY(-8px)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                boxShadow: `0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 0 20px ${color}22`,
+                '& .stat-icon': {
+                    transform: 'scale(1.2) rotate(-5deg)',
+                    opacity: 0.5
+                }
             }
         }}
     >
-        <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+        <Box className="stat-icon" sx={{ position: 'absolute', top: 16, right: 16, transition: 'all 0.4s', opacity: 0.15 }}>
             {icon}
         </Box>
-        <CardContent sx={{ p: 3 }}>
-            <Typography variant="h4" fontWeight="bold" sx={{ color: '#1e293b', mb: 1, fontFamily: 'Outfit' }}>{value}</Typography>
-            <Typography variant="body2" fontWeight="600" sx={{ color: '#64748b', mb: 1 }}>{title}</Typography>
-            <Typography variant="caption" sx={{ color: color, fontWeight: '900', letterSpacing: 0.5 }}>{change}</Typography>
+        <CardContent sx={{ p: 4 }}>
+            <Typography variant="h3" sx={{ fontWeight: 800, color: '#fff', mb: 1, fontFamily: 'Outfit', letterSpacing: '-0.02em' }}>{value}</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', mb: 1, display: 'block', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{title}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                <Typography variant="caption" sx={{ color: color, fontWeight: '900', letterSpacing: 0.5 }}>{change}</Typography>
+            </Box>
         </CardContent>
     </Card>
 );
@@ -294,13 +314,12 @@ const StatCard = ({ title, value, change, color, icon }) => (
 const AppointmentRow = ({ name, time, status, statusColor, id, condition }) => {
     const navigate = useNavigate();
 
-    // Convert status to a color dot
     const getStatusColor = (color) => {
         switch (color) {
             case 'error': return '#ef4444';
             case 'warning': return '#f59e0b';
             case 'success': return '#10b981';
-            default: return '#6b7280';
+            default: return '#6366f1';
         }
     };
 
@@ -308,29 +327,55 @@ const AppointmentRow = ({ name, time, status, statusColor, id, condition }) => {
         <Box
             sx={{
                 p: 2.5,
-                borderBottom: '1px solid #e5e7eb',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                transition: 'background-color 0.2s',
-                '&:hover': { bgcolor: '#f9fafb', cursor: 'pointer' },
+                transition: 'all 0.2s',
+                '&:hover': { 
+                    bgcolor: 'rgba(255,255,255,0.02)', 
+                    cursor: 'pointer',
+                    transform: 'scale(1.005)'
+                },
                 '&:last-child': { borderBottom: 'none' }
             }}
             onClick={() => navigate(`/patient/${id}`)}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ width: 12, display: 'flex', justifyContent: 'center' }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: getStatusColor(statusColor) }} />
-                </Box>
-                <Avatar sx={{ bgcolor: '#dbeafe', color: '#1e40af', fontWeight: 'bold' }}>{name.charAt(0)}</Avatar>
+                <Avatar 
+                    sx={{ 
+                        width: 44, 
+                        height: 44, 
+                        background: 'linear-gradient(45deg, #1e293b 0%, #0f172a 100%)', 
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        fontWeight: 800,
+                        color: getStatusColor(statusColor)
+                    }}
+                >
+                    {name.charAt(0)}
+                </Avatar>
                 <Box>
-                    <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#111827' }}>{name}</Typography>
-                    <Typography variant="caption" sx={{ color: '#6b7280' }}>{condition} · <span style={{ fontFamily: 'monospace' }}>{id}</span></Typography>
+                    <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 700 }}>{name}</Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+                        {condition} · <span style={{ color: '#94a3b8' }}>{id}</span>
+                    </Typography>
                 </Box>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#1f2937' }}>{time}</Typography>
-                <Chip size="small" label={status} color={statusColor} sx={{ height: 20, fontSize: '0.7rem', mt: 0.5, fontWeight: 'bold' }} />
+                <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 800 }}>{time}</Typography>
+                <Chip 
+                    size="small" 
+                    label={status.toUpperCase()} 
+                    sx={{ 
+                        height: 18, 
+                        fontSize: '0.65rem', 
+                        mt: 0.5, 
+                        fontWeight: 900,
+                        bgcolor: `${getStatusColor(statusColor)}15`,
+                        color: getStatusColor(statusColor),
+                        border: `1px solid ${getStatusColor(statusColor)}33`
+                    }} 
+                />
             </Box>
         </Box>
     );
@@ -340,33 +385,34 @@ const QuickActionButton = ({ label, icon, onClick, color }) => (
     <Button
         fullWidth
         className="glass-card"
-        variant="outlined"
         onClick={onClick}
         sx={{
             display: 'flex',
             flexDirection: 'column',
-            py: 2,
-            border: 'none',
-            color: '#1e293b',
-            background: 'rgba(255, 255, 255, 0.4)',
-            transition: 'all 0.2s',
+            py: 3,
+            border: '1px solid rgba(255,255,255,0.03)',
+            color: '#fff',
+            background: 'rgba(255, 255, 255, 0.02)',
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            borderRadius: '18px',
             '&:hover': {
-                background: 'rgba(255, 255, 255, 0.8)',
-                transform: 'scale(1.02)',
-                boxShadow: `0 4px 12px rgba(0,0,0,0.1)`
+                background: 'rgba(255, 255, 255, 0.05)',
+                transform: 'translateY(-4px)',
+                boxShadow: `0 10px 30px rgba(0,0,0,0.5), 0 0 15px ${color}22`,
+                borderColor: `${color}44`
             }
         }}
     >
-        <Box sx={{ color: color, mb: 1, display: 'flex' }}>
-            {icon}
+        <Box sx={{ color: color, mb: 1, display: 'flex', opacity: 0.8 }}>
+            {React.cloneElement(icon, { sx: { fontSize: '1.8rem' } })}
         </Box>
-        <Typography variant="caption" fontWeight="900" sx={{ textTransform: 'none', letterSpacing: 0.5 }}>{label}</Typography>
+        <Typography variant="caption" sx={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em', color: '#94a3b8' }}>{label}</Typography>
     </Button>
 );
 
-const MiniStat = ({ label, value, color = '#111827' }) => (
-    <Box>
-        <Typography variant="h5" fontWeight="bold" sx={{ color: color }}>{value}</Typography>
-        <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>{label}</Typography>
+const MiniStat = ({ label, value, color = '#fff' }) => (
+    <Box sx={{ textAlign: 'center' }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: color, fontFamily: 'Outfit' }}>{value}</Typography>
+        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase', display: 'block', mt: 0.5 }}>{label}</Typography>
     </Box>
 );

@@ -68,8 +68,13 @@ COPY --from=patient-build /build/dist /app/static/patient
 # Create necessary directories
 RUN mkdir -p /app/secure_uploads /app/uploads
 
-# Expose port
+# Start the system
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 8080
 
-# Start the unified server — Railway injects PORT as env var
-CMD ["python", "-c", "import os; port = int(os.environ.get('PORT', 8080)); os.execvp('uvicorn', ['uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', str(port), '--log-level', 'info'])"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

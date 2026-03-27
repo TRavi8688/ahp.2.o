@@ -52,93 +52,141 @@ export default function Schedule() {
     };
 
     return (
-        <Box sx={{ maxWidth: 1400, mx: 'auto', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ maxWidth: 1400, mx: 'auto', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
 
-            {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h5" fontWeight="bold" sx={{ color: '#1f2937' }}>
-                    Schedule
-                </Typography>
+            {/* Header / Nav Hub */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 5 }}>
+                <Box>
+                    <Typography variant="h3" sx={{ fontWeight: 900, color: '#fff', fontFamily: 'Outfit', letterSpacing: '-1.5px', mb: 1 }}>Clinical Schedule</Typography>
+                    <Typography variant="body1" sx={{ color: '#64748b', fontWeight: 600, letterSpacing: 0.5 }}>SYNCHRONIZED PRACTITIONER FLOW</Typography>
+                </Box>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <IconButton size="small" sx={{ border: '1px solid #e5e7eb' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, bgcolor: 'rgba(255,255,255,0.02)', p: 1, px: 3, borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <IconButton size="small" sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' } }}>
                         <ArrowBackIosNewIcon fontSize="small" />
                     </IconButton>
-                    <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#374151', minWidth: 150, textAlign: 'center' }}>
-                        Week of Oct 14 - 18
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#fff', minWidth: 160, textAlign: 'center', fontFamily: 'Outfit' }}>
+                        OCT 14 — OCT 18
                     </Typography>
-                    <IconButton size="small" sx={{ border: '1px solid #e5e7eb' }}>
+                    <IconButton size="small" sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' } }}>
                         <ArrowForwardIosIcon fontSize="small" />
                     </IconButton>
                 </Box>
 
-                <Button variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: '#0d9488', '&:hover': { bgcolor: '#0f766e' }, textTransform: 'none', fontWeight: 'bold' }}>
-                    Add Appointment
+                <Button 
+                    variant="contained" 
+                    startIcon={<AddIcon />} 
+                    sx={{ 
+                        bgcolor: '#0d9488', 
+                        boxShadow: '0 8px 25px rgba(13, 148, 136, 0.3)',
+                        '&:hover': { bgcolor: '#0f766e', transform: 'translateY(-2px)' }, 
+                        textTransform: 'none', 
+                        fontWeight: 900,
+                        borderRadius: '16px',
+                        px: 4,
+                        py: 1.5,
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    Provision Slot
                 </Button>
             </Box>
 
-            {/* Calendar Grid */}
-            <Card elevation={0} sx={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: 2, display: 'flex', flexDirection: 'column' }}>
+            {/* Calendar Intelligence Grid */}
+            <Card className="glass-card" elevation={0} sx={{ 
+                flex: 1, 
+                border: '1px solid rgba(255,255,255,0.05)', 
+                borderRadius: '32px', 
+                display: 'flex', 
+                flexDirection: 'column',
+                bgcolor: 'rgba(255,255,255,0.01)',
+                backdropFilter: 'blur(40px)',
+                overflow: 'hidden'
+            }}>
                 <Grid container sx={{ height: '100%' }}>
                     {days.map((dayObj, index) => (
-                        <Grid item xs={12} md={2.4} key={dayObj.day} sx={{ borderRight: index < 4 ? '1px solid #e5e7eb' : 'none', display: 'flex', flexDirection: 'column' }}>
+                        <Grid item xs={12} md={2.4} key={dayObj.day} sx={{ 
+                            borderRight: index < 4 ? '1px solid rgba(255,255,255,0.03)' : 'none', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            transition: 'all 0.3s',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.01)' }
+                        }}>
 
-                            {/* Column Header */}
-                            <Box sx={{ p: 2, textAlign: 'center', borderBottom: '1px solid #e5e7eb', bgcolor: dayObj.isToday ? '#f0fdfa' : 'white' }}>
-                                <Typography variant="caption" sx={{ color: '#9ca3af', fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                            {/* Column Cluster Header */}
+                            <Box sx={{ 
+                                p: 3, 
+                                textAlign: 'center', 
+                                borderBottom: '1px solid rgba(255,255,255,0.03)', 
+                                bgcolor: dayObj.isToday ? 'rgba(13, 148, 136, 0.05)' : 'transparent',
+                                position: 'relative'
+                            }}>
+                                {dayObj.isToday && (
+                                    <Box sx={{ 
+                                        position: 'absolute', top: 0, left: 0, right: 0, height: 4, bgcolor: '#0d9488',
+                                        boxShadow: '0 0 15px #0d9488'
+                                    }} />
+                                )}
+                                <Typography variant="caption" sx={{ color: dayObj.isToday ? '#0d9488' : '#64748b', fontWeight: 900, display: 'block', mb: 1, letterSpacing: 1.5 }}>
                                     {dayObj.day}
                                 </Typography>
                                 <Typography
                                     variant="h4"
                                     sx={{
-                                        fontWeight: 'bold',
-                                        color: dayObj.isToday ? '#0d9488' : '#1f2937',
-                                        width: 48,
-                                        height: 48,
-                                        lineHeight: '48px',
-                                        mx: 'auto',
-                                        borderRadius: '50%',
-                                        bgcolor: dayObj.isToday ? '#ccfbf1' : 'transparent'
+                                        fontWeight: 900,
+                                        color: dayObj.isToday ? '#fff' : '#475569',
+                                        fontFamily: 'Outfit',
+                                        transition: 'all 0.3s'
                                     }}
                                 >
                                     {dayObj.date}
                                 </Typography>
                             </Box>
 
-                            {/* Column Body / Slots */}
-                            <Box sx={{ flex: 1, p: 1.5, bgcolor: dayObj.isToday ? '#f8fafc' : '#f9fafb', overflowY: 'auto' }}>
+                            {/* Column Node Body */}
+                            <Box sx={{ flex: 1, p: 2, overflowY: 'auto' }}>
                                 {appointments[dayObj.day].map((apt, i) => (
                                     <Box
                                         key={i}
                                         onClick={() => apt.id ? navigate(`/patient/${apt.id}`) : null}
                                         sx={{
-                                            p: 1.5,
-                                            mb: 1.5,
-                                            bgcolor: getBgHex(apt.color),
+                                            p: 2.5,
+                                            mb: 2,
+                                            bgcolor: 'rgba(255,255,255,0.02)',
+                                            border: '1px solid rgba(255,255,255,0.05)',
                                             borderLeft: `4px solid ${getColorHex(apt.color)}`,
-                                            borderRadius: 1,
+                                            borderRadius: '16px',
                                             cursor: apt.id ? 'pointer' : 'default',
-                                            transition: 'transform 0.1s',
+                                            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                                             '&:hover': {
-                                                transform: apt.id ? 'translateY(-2px)' : 'none',
-                                                boxShadow: apt.id ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none'
+                                                bgcolor: 'rgba(255,255,255,0.04)',
+                                                transform: apt.id ? 'scale(1.02)' : 'none',
+                                                boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
                                             }
                                         }}
                                     >
-                                        <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#111827', mb: 0.5 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 900, color: '#fff', mb: 1, fontFamily: 'Outfit' }}>
                                             {apt.patient || apt.title}
                                         </Typography>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                                            <WatchLaterIcon sx={{ fontSize: 14, color: '#6b7280', mr: 0.5 }} />
-                                            <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+                                            <WatchLaterIcon sx={{ fontSize: 14, color: '#64748b' }} />
+                                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, fontFamily: 'monospace' }}>
                                                 {apt.time}
                                             </Typography>
                                         </Box>
-                                        <Typography variant="caption" sx={{ color: getColorHex(apt.color), fontWeight: 'bold' }}>
-                                            {apt.type}
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: getColorHex(apt.color) }} />
+                                            <Typography variant="caption" sx={{ color: getColorHex(apt.color), fontWeight: 900, fontSize: '0.65rem', letterSpacing: 0.5 }}>
+                                                {apt.type.toUpperCase()}
+                                            </Typography>
+                                        </Box>
                                     </Box>
                                 ))}
+                                {appointments[dayObj.day].length === 0 && (
+                                    <Box sx={{ py: 4, textAlign: 'center' }}>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.02)', fontWeight: 900, letterSpacing: 2 }}>VAULT EMPTY</Typography>
+                                    </Box>
+                                )}
                             </Box>
                         </Grid>
                     ))}

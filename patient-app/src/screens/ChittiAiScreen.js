@@ -21,7 +21,7 @@ const LANGUAGES = [
 
 export default function ChittiAiScreen() {
     const [messages, setMessages] = useState([
-        { id: '1', sender: 'ai', text: 'Hi! I am Chitti. How can I held you with your health today?' }
+        { id: '1', sender: 'ai', text: 'Hi! I am Chitti. How can I help you with your health today?' }
     ]);
     const [inputText, setInputText] = useState('');
     const [isTyping, setIsTyping] = useState(false);
@@ -35,7 +35,7 @@ export default function ChittiAiScreen() {
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const token = await AsyncStorage.getItem('token');
+                const token = await SecurityUtils.getToken();
                 const resp = await axios.get(`${API_BASE_URL}/patient/chat-history`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -64,7 +64,7 @@ export default function ChittiAiScreen() {
         setIsTyping(true);
 
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await SecurityUtils.getToken();
             const formData = new FormData();
             if (text) formData.append('text', text);
             formData.append('language_code', selectedLang);

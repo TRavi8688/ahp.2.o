@@ -165,152 +165,194 @@ export default function PatientDetailView() {
             {/* Everything below is opacity 0.4 if revoked */}
             <Box sx={{ opacity: isRevoked ? 0.4 : 1 }} style={{ pointerEvents: isRevoked ? 'none' : 'auto' }}>
 
-                {/* Patient Header Card */}
-                <Card
-                    className="glass-card"
-                    elevation={0}
-                    sx={{
-                        background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.9) 0%, rgba(17, 24, 39, 0.9) 100%)',
-                        color: 'white',
-                        borderRadius: '32px',
-                        mb: 4,
-                        overflow: 'hidden',
-                        boxShadow: '0 12px 40px rgba(0,0,0,0.3)'
-                    }}
-                >
-                    <Box sx={{ p: { xs: 3, md: 5 }, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                        <Avatar sx={{
-                            width: 100,
-                            height: 100,
-                            bgcolor: '#0ea5e9',
-                            fontSize: '3rem',
-                            fontWeight: 'bold',
-                            border: '4px solid rgba(255,255,255,0.3)',
-                            boxShadow: '0 0 20px rgba(14, 165, 233, 0.4)'
-                        }}>
-                            {patient.profile.name.split(' ').map(n => n[0]).join('')}
-                        </Avatar>
+            {/* Patient Header Card */}
+            <Card
+                className="glass-card"
+                elevation={0}
+                sx={{
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    backdropFilter: 'blur(30px)',
+                    color: 'white',
+                    borderRadius: '40px',
+                    mb: 4,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+                    position: 'relative'
+                }}
+            >
+                {/* Decorative Accent */}
+                <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'linear-gradient(90deg, #0d9488, #6366f1)' }} />
+                
+                <Box sx={{ p: { xs: 4, md: 6 }, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5 }}>
+                    <Avatar sx={{
+                        width: 120,
+                        height: 120,
+                        bgcolor: 'rgba(99, 102, 241, 0.1)',
+                        color: '#6366f1',
+                        fontSize: '3.5rem',
+                        fontWeight: 900,
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        boxShadow: '0 0 30px rgba(99, 102, 241, 0.1)',
+                        fontFamily: 'Outfit'
+                    }}>
+                        {patient.profile.name.split(' ').map(n => n[0]).join('')}
+                    </Avatar>
 
-                        <Box sx={{ flex: 1, minWidth: 300 }}>
-                            <Typography variant="h2" fontWeight="900" sx={{ mb: 1, fontFamily: 'Outfit' }}>{patient.profile.name}</Typography>
-                            <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', mb: 3 }}>
-                                {patient.profile.age}yrs · {patient.profile.gender} · <Box component="span" sx={{ color: '#2dd4bf', fontWeight: 'bold' }}>Blood Group: {patient.profile.blood_group}</Box>
-                            </Typography>
-
-                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                <Chip
-                                    label={patient.profile.ahp_id}
-                                    sx={{
-                                        bgcolor: 'rgba(255,255,255,0.1)',
-                                        color: '#fff',
-                                        fontFamily: 'monospace',
-                                        fontWeight: '700',
-                                        borderRadius: '8px',
-                                        border: '1px solid rgba(255,255,255,0.2)'
-                                    }}
-                                />
-                                <Chip
-                                    label="SECURE AHP LINK"
-                                    icon={<CheckCircleOutlineIcon sx={{ color: '#4ade80 !important' }} />}
-                                    sx={{
-                                        bgcolor: 'rgba(52, 211, 153, 0.2)',
-                                        color: '#4ade80',
-                                        fontWeight: '900',
-                                        letterSpacing: 1
-                                    }}
-                                />
-                            </Box>
-                        </Box>
-
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                            <Button
-                                variant="contained"
-                                startIcon={<MedicationIcon />}
-                                sx={{
-                                    bgcolor: '#fff',
-                                    color: '#1e1b4b',
-                                    px: 4,
-                                    py: 1.5,
-                                    borderRadius: '16px',
-                                    '&:hover': { bgcolor: '#f1f5f9', transform: 'scale(1.05)' },
-                                    fontWeight: '900',
-                                    textTransform: 'none',
-                                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-                                }}
-                                onClick={() => navigate('/prescriptions', { state: { patient: patient.profile } })}
-                            >
-                                Prescribe
-                            </Button>
-                        </Box>
-                    </Box>
-                </Card>
-
-                {/* Allergy Alert Bar */}
-                {patient.allergies.length > 0 ? (
-                    <Box sx={{ bgcolor: '#ef4444', p: 2, borderRadius: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                        <WarningAmberIcon sx={{ color: 'white' }} />
-                        <Typography variant="body1" fontWeight="bold" color="white">Allergy Alert — Check Before Prescribing:</Typography>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {patient.allergies.map(a => (
-                                <Chip key={a.id} label={`${a.allergen} (${a.severity})`} sx={{ bgcolor: '#7f1d1d', color: 'white', fontWeight: 'bold' }} />
-                            ))}
-                        </Box>
-                    </Box>
-                ) : (
-                    <Box sx={{ bgcolor: '#10b981', p: 2, borderRadius: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <CheckCircleOutlineIcon sx={{ color: 'white' }} />
-                        <Typography variant="body1" fontWeight="bold" color="white">No known allergies recorded.</Typography>
-                    </Box>
-                )}
-
-                {/* AI Summary Card */}
-                <Card
-                    className="glass-card"
-                    elevation={0}
-                    sx={{
-                        background: 'rgba(76, 29, 149, 0.1)',
-                        border: '1px solid rgba(139, 92, 246, 0.3)',
-                        mb: 4,
-                        borderRadius: '24px',
-                        overflow: 'hidden'
-                    }}
-                >
-                    <Box sx={{ p: 4 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Box sx={{
-                                    p: 1,
-                                    bgcolor: '#7c3aed',
-                                    borderRadius: '12px',
-                                    display: 'flex',
-                                    boxShadow: '0 0 15px rgba(124, 58, 237, 0.5)'
-                                }}>
-                                    <SmartToyIcon sx={{ color: '#fff' }} />
-                                </Box>
-                                <Typography variant="h6" fontWeight="900" sx={{ color: '#fff', letterSpacing: 0.5 }}>CHITTI AI — CLINICAL INSIGHT</Typography>
-                            </Box>
+                    <Box sx={{ flex: 1, minWidth: 300 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
+                            <Typography variant="h2" sx={{ fontWeight: 900, fontFamily: 'Outfit', letterSpacing: '-2px' }}>{patient.profile.name}</Typography>
                             <Chip
-                                label="REAL-TIME"
+                                label="VERIFIED IDENTITY"
                                 size="small"
                                 sx={{
-                                    bgcolor: '#7c3aed',
-                                    color: 'white',
-                                    fontWeight: '900',
-                                    px: 1
+                                    bgcolor: 'rgba(13, 148, 136, 0.1)',
+                                    color: '#0d9488',
+                                    fontWeight: 900,
+                                    fontSize: '0.65rem',
+                                    height: 24,
+                                    border: '1px solid rgba(13, 148, 136, 0.2)'
                                 }}
                             />
                         </Box>
-
-                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.9)', lineHeight: 1.8, mb: 3, fontWeight: 500 }}
-                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(patient.ai_summary || "No clinical insight available for this patient.") }}
-                        />
-
-                        <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CheckCircleOutlineIcon sx={{ fontSize: 14 }} /> Verified Clinical Record Sync · AI-Assisted Recommendation
+                        <Typography variant="h6" sx={{ color: '#64748b', mb: 3, fontWeight: 600 }}>
+                            {patient.profile.age} Years Old · {patient.profile.gender} · <Box component="span" sx={{ color: '#fff', fontWeight: 800 }}>{patient.profile.blood_group}</Box>
                         </Typography>
+
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                            <Box sx={{ px: 2, py: 0.8, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+                                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 800, mr: 1 }}>AHP ID:</Typography>
+                                <Typography component="span" sx={{ color: '#fff', fontFamily: 'monospace', fontWeight: 700 }}>{patient.profile.ahp_id}</Typography>
+                            </Box>
+                        </Box>
                     </Box>
-                </Card>
+
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                            variant="contained"
+                            startIcon={<MedicationIcon />}
+                            sx={{
+                                bgcolor: '#0d9488',
+                                color: '#fff',
+                                px: 5,
+                                py: 1.8,
+                                borderRadius: '18px',
+                                '&:hover': { bgcolor: '#0f766e', transform: 'translateY(-2px)' },
+                                fontWeight: 900,
+                                textTransform: 'none',
+                                transition: 'all 0.2s',
+                                fontSize: '1rem',
+                                boxShadow: '0 8px 20px rgba(13, 148, 136, 0.3)'
+                            }}
+                            onClick={() => navigate('/prescriptions', { state: { patient: patient.profile } })}
+                        >
+                            Draft Prescription
+                        </Button>
+                    </Box>
+                </Box>
+            </Card>
+
+            {/* Allergy Alert Bar - Premium Warning */}
+            {patient.allergies.length > 0 ? (
+                <Box sx={{ 
+                    background: 'rgba(239, 68, 68, 0.05)', 
+                    p: 3, 
+                    borderRadius: '24px', 
+                    mb: 4, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 3, 
+                    border: '1px solid rgba(239, 68, 68, 0.15)',
+                    boxShadow: '0 10px 30px rgba(239, 68, 68, 0.05)'
+                }}>
+                    <Box sx={{ p: 1.5, bgcolor: '#ef4444', borderRadius: '14px', animation: 'pulse 2s infinite' }}>
+                        <WarningAmberIcon sx={{ color: 'white' }} />
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ color: '#f87171', fontWeight: 900, fontFamily: 'Outfit' }}>CRITICAL CONTRAINDICATIONS</Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>Detected hypersensitivity patterns. Exercise high clinical caution.</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                        {patient.allergies.map(a => (
+                            <Chip 
+                                key={a.id} 
+                                label={`${a.allergen} (${a.severity})`} 
+                                sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', fontWeight: 900, border: '1px solid rgba(239, 68, 68, 0.2)' }} 
+                            />
+                        ))}
+                    </Box>
+                </Box>
+            ) : (
+                <Box sx={{ 
+                    background: 'rgba(20, 184, 166, 0.05)', 
+                    p: 2.5, 
+                    borderRadius: '24px', 
+                    mb: 4, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2.5,
+                    border: '1px solid rgba(20, 184, 166, 0.1)'
+                }}>
+                    <Box sx={{ p: 1, bgcolor: '#14b8a6', borderRadius: '10px' }}>
+                        <CheckCircleOutlineIcon sx={{ color: 'white', fontSize: 20 }} />
+                    </Box>
+                    <Typography variant="body2" sx={{ color: '#2dd4bf', fontWeight: 800, letterSpacing: 0.5 }}>CLEARED: NO KNOWN ALLERGIES ENCOUNTERED</Typography>
+                </Box>
+            )}
+
+            {/* AI Summary Card - Intelligence Briefing */}
+            <Card
+                className="glass-card"
+                elevation={0}
+                sx={{
+                    background: 'rgba(99, 102, 241, 0.03)',
+                    border: '1px solid rgba(99, 102, 241, 0.1)',
+                    mb: 5,
+                    borderRadius: '32px',
+                    overflow: 'hidden'
+                }}
+            >
+                <Box sx={{ p: 5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                            <Box sx={{
+                                p: 1.2,
+                                bgcolor: '#6366f1',
+                                borderRadius: '14px',
+                                display: 'flex',
+                                boxShadow: '0 6px 20px rgba(99, 102, 241, 0.4)'
+                            }}>
+                                <SmartToyIcon sx={{ color: '#fff' }} />
+                            </Box>
+                            <Box>
+                                <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', letterSpacing: 1, fontFamily: 'Outfit' }}>INTELLIGENCE CONTEXT</Typography>
+                                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>SYNTHESIZED BY MULAJNA CORE</Typography>
+                            </Box>
+                        </Box>
+                        <Chip
+                            label="PRECISION ANALYSIS"
+                            sx={{
+                                background: 'linear-gradient(45deg, #6366f1 0%, #a855f7 100%)',
+                                color: 'white',
+                                fontWeight: 900,
+                                fontSize: '0.7rem',
+                                border: 'none'
+                            }}
+                        />
+                    </Box>
+
+                    <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Typography variant="h6" sx={{ color: '#cbd5e1', lineHeight: 1.8, fontWeight: 500, fontFamily: 'Inter' }}
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(patient.ai_summary || "Synthesizing clinical data... Awaiting node verification.") }}
+                        />
+                    </Box>
+
+                    <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ width: 8, height: 8, bgcolor: '#10b981', borderRadius: '50%', boxShadow: '0 0 10px #10b981' }} />
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>ENCRYPTED DATA FEED SECURE</Typography>
+                    </Box>
+                </Box>
+            </Card>
 
                 {/* Two-column section */}
                 <Grid container spacing={4} sx={{ mb: 4 }}>
@@ -501,71 +543,94 @@ export default function PatientDetailView() {
                 {/* Second Two-column section */}
                 <Grid container spacing={4}>
 
+                {/* Bottom section: History & Intel */}
+                <Grid container spacing={4}>
+
                     {/* Left Column: Timeline */}
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937', mb: 3 }}>Visit History</Typography>
-                        <Box sx={{ position: 'relative', pl: 3, borderLeft: '2px solid #e5e7eb', ml: 1 }}>
-                            {patient.history && patient.history.length > 0 ? patient.history.map((h, i) => (
-                                <Box key={i} sx={{ mb: 4, position: 'relative' }}>
-                                    <Box sx={{
-                                        position: 'absolute', left: -31, top: 4, width: 14, height: 14, borderRadius: '50%',
-                                        bgcolor: h.type === 'teal' ? '#0d9488' : h.type === 'red' ? '#ef4444' : '#f59e0b',
-                                        border: '3px solid white'
-                                    }} />
-                                    <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#111827' }}>{h.title}</Typography>
-                                    <Typography variant="body2" sx={{ color: '#4b5563', my: 0.5 }}>{h.desc}</Typography>
-                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#6b7280' }}>{h.date}</Typography>
-                                </Box>
-                            )) : (
-                                <Typography variant="body2" sx={{ color: '#6b7280' }}>No previous visits recorded.</Typography>
-                            )}
-                        </Box>
+                    <Grid item xs={12} md={7}>
+                        <Card className="glass-card" sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', mb: 4, fontFamily: 'Outfit', letterSpacing: 1 }}>CHRONOLOGICAL ENCOUNTERS</Typography>
+                            <Box sx={{ position: 'relative', pl: 4, borderLeft: '1px solid rgba(255,255,255,0.1)', ml: 1 }}>
+                                {patient.history && patient.history.length > 0 ? patient.history.map((h, i) => (
+                                    <Box key={i} sx={{ mb: 5, position: 'relative' }}>
+                                        <Box sx={{
+                                            position: 'absolute', left: -37, top: 4, width: 14, height: 14, borderRadius: '50%',
+                                            bgcolor: h.type === 'teal' ? '#0d9488' : h.type === 'red' ? '#ef4444' : '#6366f1',
+                                            boxShadow: `0 0 10px ${h.type === 'teal' ? '#0d9488' : h.type === 'red' ? '#ef4444' : '#6366f1'}`,
+                                            border: '2px solid #050810'
+                                        }} />
+                                        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#fff', mb: 0.5, fontFamily: 'Outfit' }}>{h.title.toUpperCase()}</Typography>
+                                        <Typography variant="body2" sx={{ color: '#64748b', mb: 1.5, fontWeight: 500 }}>{h.desc}</Typography>
+                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#0d9488', fontWeight: 800 }}>{h.date.toUpperCase()}</Typography>
+                                    </Box>
+                                )) : (
+                                    <Typography variant="body2" sx={{ color: '#64748b' }}>No clinical history found in AHP network.</Typography>
+                                )}
+                            </Box>
+                        </Card>
                     </Grid>
 
                     {/* Right Column: Emergency & Notes */}
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937', mb: 2 }}>Emergency Contacts</Typography>
-                        <Box sx={{ mb: 4 }}>
-                            {patient.contacts && patient.contacts.length > 0 ? patient.contacts.map(c => (
-                                <Box key={c.name} sx={{ mb: 1.5, display: 'flex', justifyContent: 'space-between', p: 2, bgcolor: '#f9fafb', borderRadius: 2, border: '1px solid #e5e7eb' }}>
-                                    <Box>
-                                        <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#111827' }}>{c.name}</Typography>
-                                        <Typography variant="caption" sx={{ color: '#6b7280' }}>{c.relation}</Typography>
+                    <Grid item xs={12} md={5}>
+                        <Card className="glass-card" sx={{ p: 4, mb: 4, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', mb: 3, fontFamily: 'Outfit', letterSpacing: 1 }}>EMERGENCY HUB</Typography>
+                            <Box sx={{ mb: 2 }}>
+                                {patient.contacts && patient.contacts.length > 0 ? patient.contacts.map(c => (
+                                    <Box key={c.name} sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', p: 2.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <Box>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 900, color: '#fff' }}>{c.name}</Typography>
+                                            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>{c.relation.toUpperCase()}</Typography>
+                                        </Box>
+                                        <Typography variant="body2" sx={{ fontWeight: 900, color: '#0d9488', fontFamily: 'monospace' }}>{c.phone}</Typography>
                                     </Box>
-                                    <Typography variant="body2" fontWeight="bold" sx={{ color: '#0d9488' }}>{c.phone}</Typography>
-                                </Box>
-                            )) : (
-                                <Typography variant="body2" sx={{ color: '#6b7280' }}>No emergency contacts provided.</Typography>
-                            )}
-                        </Box>
-
-                        <Divider sx={{ my: 3 }} />
+                                )) : (
+                                    <Typography variant="body2" sx={{ color: '#64748b' }}>No emergency secondary nodes registered.</Typography>
+                                )}
+                            </Box>
+                        </Card>
 
                         {!isRevoked && (
-                            <Box>
-                                <Typography variant="h6" fontWeight="bold" sx={{ color: '#1f2937', mb: 2 }}>Add Consultation Notes</Typography>
+                            <Card className="glass-card" sx={{ p: 4, bgcolor: 'rgba(13, 148, 136, 0.05)', border: '1px solid rgba(13, 148, 136, 0.15)', borderRadius: '24px' }}>
+                                <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', mb: 2, fontFamily: 'Outfit', letterSpacing: 1 }}>CLINICAL MEMO</Typography>
                                 <TextField
                                     fullWidth
                                     multiline
                                     rows={4}
-                                    placeholder="Type notes for this consultation — will be added to patient AHP profile with consent..."
+                                    placeholder="Annotate this encounter... Encrypted and synced to AHP profile."
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
-                                    sx={{ mb: 2, bgcolor: 'white' }}
+                                    sx={{ 
+                                        mb: 3, 
+                                        '& .MuiOutlinedInput-root': { 
+                                            color: 'white', 
+                                            bgcolor: 'rgba(0,0,0,0.2)', 
+                                            borderRadius: '16px',
+                                            '& fieldset': { borderColor: 'rgba(255,255,255,0.05)' }
+                                        } 
+                                    }}
                                 />
                                 <Button
                                     variant="contained"
                                     fullWidth
                                     disableElevation
-                                    sx={{ bgcolor: '#0d9488', '&:hover': { bgcolor: '#0f766e' }, py: 1.5, fontWeight: 'bold' }}
+                                    sx={{ 
+                                        bgcolor: '#0d9488', 
+                                        '&:hover': { bgcolor: '#0f766e' }, 
+                                        py: 2, 
+                                        borderRadius: '14px',
+                                        fontWeight: 900,
+                                        boxShadow: '0 8px 20px rgba(13, 148, 136, 0.2)'
+                                    }}
                                     onClick={handleSaveNotes}
                                     disabled={!notes.trim()}
                                 >
-                                    Save Notes to AHP
+                                    SYNCHRONIZE TO VAULT
                                 </Button>
-                            </Box>
+                            </Card>
                         )}
                     </Grid>
+
+                </Grid>
 
                 </Grid>
             </Box>

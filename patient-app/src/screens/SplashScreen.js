@@ -3,8 +3,8 @@ import { View, StyleSheet, Platform, Image, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SecurityUtils } from '../utils/security';
 
-// Import the logo to let Expo/Webpack handle the path bundling
-import logo from '../../assets/mulajna_splash_hero.png';
+// Import the cinematic splash to let Expo/Webpack handle the path bundling
+import logo from '../../assets/splash.png';
 
 const SplashScreen = () => {
   const navigation = useNavigation();

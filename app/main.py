@@ -91,6 +91,12 @@ async def observability_middleware(request: Request, call_next):
         logger.error(f"SYSTEM_CRASH: {request.method} {request.url.path} -> {str(e)}", request_id=request_id)
         raise
 
+# --- Health Check ---
+@app.get("/health")
+async def health_check():
+    """Liveness probe for Nginx/K8s."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 # --- Metrics Endpoint ---
 @app.get("/metrics")
 async def get_metrics():

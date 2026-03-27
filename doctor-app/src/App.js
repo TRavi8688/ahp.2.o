@@ -23,40 +23,42 @@ import Analytics from './pages/Analytics';
 
 const theme = createTheme({
     palette: {
-        primary: { main: '#4C1D95' }, // Deep Indigo
-        secondary: { main: '#0D9488' }, // Surgical Teal
-        warning: { main: '#F59E0B' }, // Sunset Amber (Guardian)
+        mode: 'dark', // Explicitly dark mode
+        primary: { main: '#0D9488' }, // Surgical Teal (Medical Precision)
+        secondary: { main: '#6366F1' }, // Indigo Glow (AI)
+        warning: { main: '#F59E0B' }, 
         background: {
-            default: '#1E1B4B', // Dark Deep Indigo
-            paper: 'rgba(255, 255, 255, 0.7)' // Glass Effect Placeholder
+            default: '#050810', // Mulajna Luxury Deep Black
+            paper: '#0A0E1A' // Slightly lighter for layering
         },
         text: {
-            primary: '#1e293b',
-            secondary: '#64748b'
+            primary: '#F8FAFC',
+            secondary: '#94A3B8'
         }
     },
     typography: {
         fontFamily: '"Inter", "Outfit", sans-serif',
-        h1: { fontFamily: '"Outfit", sans-serif', fontWeight: 700 },
-        h2: { fontFamily: '"Outfit", sans-serif', fontWeight: 700 },
+        h1: { fontFamily: '"Outfit", sans-serif', fontWeight: 700, letterSpacing: '-0.02em' },
+        h2: { fontFamily: '"Outfit", sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
         h3: { fontFamily: '"Outfit", sans-serif', fontWeight: 600 },
-        button: { textTransform: 'none', fontWeight: 600 }
+        button: { textTransform: 'none', fontWeight: 600, letterSpacing: '0.02em' }
     },
     components: {
         MuiCssBaseline: {
             styleOverrides: {
                 body: {
-                    backgroundColor: '#1E1B4B',
-                    backgroundImage: 'radial-gradient(circle at top right, #4C1D95, #1E1B4B)',
+                    backgroundColor: '#050810',
+                    backgroundImage: 'radial-gradient(circle at 0% 0%, rgba(13, 148, 136, 0.05) 0%, transparent 50%), radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 50%)',
                     backgroundAttachment: 'fixed',
                     minHeight: '100vh',
+                    color: '#F8FAFC'
                 },
                 '.glass-card': {
-                    background: 'rgba(255, 255, 255, 0.7)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)',
                     borderRadius: '24px',
                 }
             }
@@ -65,7 +67,10 @@ const theme = createTheme({
             styleOverrides: {
                 root: {
                     borderRadius: '24px',
-                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.08)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    backdropFilter: 'blur(24px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)',
                 }
             }
         }
