@@ -124,7 +124,46 @@ async def validate_env():
     else:
         logger.info("ENV_VALIDATION: All system variables present.")
 
-# ... (CORS and logic remains the same)
+# --- Register Handlers ---
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- CORS Configuration ---
+# Enterprise: Strict origin control. Use environment variables for production.
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "https://api.mulajna.com",
+    "https://ahp2o-production.up.railway.app",
+    "*" # Placeholder for initial testing, change to specific origins later
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def validate_env():
+    """Validate critical environment variables at startup."""
+    # FATAL: App cannot function without these
+    fatal_vars = ["DATABASE_URL", "ENCRYPTION_KEY"]
+    # WARNING: App stays up, but specific features (AI) will fail
+    degraded_vars = ["GROQ_API_KEY", "GEMINI_API_KEY", "REDIS_URL"]
+    
+    missing_fatal = [v for v in fatal_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
+    if missing_fatal:
+        logger.critical(f"FATAL: Missing critical environment variables: {', '.join(missing_fatal)}")
+        import sys
+        sys.exit(1)
+        
+    missing_degraded = [v for v in degraded_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
+    if missing_degraded:
+        logger.warning(f"DEGRADED MODE: Missing optional variables {', '.join(missing_degraded)}. AI and Cache features may be disabled.")
+    else:
+        logger.info("ENV_VALIDATION: All system variables present.")
 
 # ===================================================================
 # API ROUTES
@@ -138,9 +177,6 @@ app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 # ===================================================================
 # UNIFIED STATIC FILE SERVING
 # ===================================================================
-from fastapi.staticfiles import StaticFiles
-import os
-
 # Mount built React/Expo apps
 # Dockerfile copies these to /app/static/doctor and /app/static/patient
 if os.path.exists("/app/static/doctor"):
@@ -153,4 +189,15 @@ if os.path.exists("/app/static/patient"):
 async def root_redirect():
     """Redirect root to Patient App."""
     from fastapi.responses import RedirectResponse
+    # Use relative redirect to avoid domain issues
     return RedirectResponse(url="/patient/")
+
+@app.get("/doctor/")
+async def doctor_root():
+    """Ensure doctor root serves index.html."""
+    return FileResponse("/app/static/doctor/index.html")
+
+@app.get("/patient/")
+async def patient_root():
+    """Ensure patient root serves index.html."""
+    return FileResponse("/app/static/patient/index.html")
