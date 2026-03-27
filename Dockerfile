@@ -74,9 +74,7 @@ RUN mkdir -p /app/secure_uploads /app/uploads
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Expose the default port (overridden by Railway $PORT)
 EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -10,5 +10,6 @@ if [ "$SERVICE_TYPE" = "worker" ]; then
     exec python start_worker.py
 else
     echo "🌐 Starting Mulajna API on port $PORT..."
-    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --log-level info --workers 4
+    # Reducing workers to 2 to stay within Railway's 512MB RAM limit
+    exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --log-level info --workers 2
 fi
