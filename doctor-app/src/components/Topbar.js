@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, IconButton, Badge, Avatar, Box, InputBase, Menu, MenuItem } from '@mui/material';
+import { AppBar, Toolbar, Typography, IconButton, Badge, Avatar, Box, InputBase, Menu, MenuItem, Divider } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 
 import NotificationsIcon from '@mui/icons-material/Notifications';
