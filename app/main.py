@@ -156,12 +156,21 @@ app.include_router(doctor.router, prefix=settings.API_V1_STR)
 app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 
 # ===================================================================
-# UNIFIED API ROUTING (Static files served by Nginx)
+# UNIFIED STATIC FILE SERVING
 # ===================================================================
+from fastapi.staticfiles import StaticFiles
+import os
 
-# --- Fallback / Redirect to Nginx-served Patient App ---
+# Mount built React/Expo apps
+# Dockerfile copies these to /app/static/doctor and /app/static/patient
+if os.path.exists("/app/static/doctor"):
+    app.mount("/doctor", StaticFiles(directory="/app/static/doctor", html=True), name="doctor")
+if os.path.exists("/app/static/patient"):
+    app.mount("/patient", StaticFiles(directory="/app/static/patient", html=True), name="patient")
+
+# --- Fallback / Redirect to Patient App ---
 @app.get("/")
 async def root_redirect():
-    """Redirect root to Patient App (Served by Nginx)."""
+    """Redirect root to Patient App."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/patient/")
