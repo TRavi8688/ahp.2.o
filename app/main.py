@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,6 +57,7 @@ app = FastAPI(
 
 # NOTE: Database creation (Base.metadata.create_all) REMOVED from startup for Enterprise Hardening.
 # Use scripts/migrate.py or alembic instead.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 @app.on_event("startup")
 async def startup_event():
@@ -187,10 +189,8 @@ if os.path.exists("/app/static/patient"):
 # --- Fallback / Redirect to Patient App ---
 @app.get("/")
 async def root_redirect():
-    """Redirect root to Patient App."""
-    from fastapi.responses import RedirectResponse
-    # Use relative redirect to avoid domain issues
-    return RedirectResponse(url="/patient/")
+    """Serve Patient App directly on root to avoid redirection hops."""
+    return FileResponse("/app/static/patient/index.html")
 
 @app.get("/doctor/")
 async def doctor_root():
