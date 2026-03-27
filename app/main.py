@@ -188,9 +188,18 @@ if os.path.exists("/app/static/patient"):
 
 # --- Fallback / Redirect to Patient App ---
 @app.get("/")
-async def root_redirect():
-    """Serve Patient App directly on root to avoid redirection hops."""
-    return FileResponse("/app/static/patient/index.html")
+async def root_diagnostic():
+    """Nuclear diagnostic: Serve simple JSON to prove external connectivity."""
+    logger.info("EXTERNAL_HIT: Root route accessed successfully.")
+    return {"status": "operational", "message": "Mulajna Engine is Online", "timestamp": datetime.now().isoformat()}
+
+@app.get("/test-assets")
+async def test_assets():
+    """Verify if FileResponse is the problem."""
+    import os
+    index_path = "/app/static/patient/index.html"
+    exists = os.path.exists(index_path)
+    return {"path": index_path, "exists": exists}
 
 @app.get("/doctor/")
 async def doctor_root():
@@ -201,3 +210,5 @@ async def doctor_root():
 async def patient_root():
     """Ensure patient root serves index.html."""
     return FileResponse("/app/static/patient/index.html")
+
+logger.info("FINAL_IMPORT_COMPLETE: app/main.py is fully loaded and ready.")
