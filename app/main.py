@@ -60,36 +60,16 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Startup diagnostics."""
-    logger.info("STARTUP: Running system readiness check...")
-    if not DOCTOR_DIR.exists(): logger.warning(f"DOCTOR_APP: Static files missing at {DOCTOR_DIR}")
-    if not PATIENT_DIR.exists(): logger.warning(f"PATIENT_APP: Static files missing at {PATIENT_DIR}")
+    logger.info(f"STARTUP: Checking assets at {STATIC_DIR}")
+    logger.info(f"DOCTOR_PATH_EXISTS: {DOCTOR_DIR.exists()}")
+    logger.info(f"PATIENT_PATH_EXISTS: {PATIENT_DIR.exists()}")
+    if DOCTOR_DIR.exists():
+        logger.info(f"DOCTOR_CONTENTS: {os.listdir(DOCTOR_DIR)}")
 
-@app.middleware("http")
-async def observability_middleware(request: Request, call_next):
-    """Enhanced observability with OpenTelemetry metrics and correlation IDs."""
-    import uuid
-    from structlog.contextvars import bind_contextvars
-    
-    request_id = str(uuid.uuid4())
-    bind_contextvars(request_id=request_id)
-    start_time = time.time()
-    
-    # Increment Metrics
-    http_request_counter.add(1, {"method": request.method, "path": request.url.path})
-    
-    try:
-        response = await call_next(request)
-        process_time = (time.time() - start_time) * 1000
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Process-Time"] = str(process_time)
-        
-        if response.status_code >= 400 and not request.url.path.startswith("/static"):
-            logger.warning(f"HTTP {response.status_code}: {request.method} {request.url.path}", 
-                          request_id=request_id, latency_ms=process_time)
-        return response
-    except Exception as e:
-        logger.error(f"SYSTEM_CRASH: {request.method} {request.url.path} -> {str(e)}", request_id=request_id)
-        raise
+# @app.middleware("http")
+# async def observability_middleware(request: Request, call_next):
+#     """Temporarily disabled to ensure connectivity."""
+#     return await call_next(request)
 
 # --- Health Check ---
 @app.get("/health")
