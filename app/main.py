@@ -127,13 +127,22 @@ async def get_metrics():
 @app.on_event("startup")
 async def validate_env():
     """Validate critical environment variables at startup."""
-    critical_vars = ["GROQ_API_KEY", "GEMINI_API_KEY", "DATABASE_URL", "REDIS_URL", "ENCRYPTION_KEY"]
-    missing = [v for v in critical_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
-    if missing:
-        logger.critical(f"FATAL: Missing critical environment variables: {', '.join(missing)}")
+    # FATAL: App cannot function without these
+    fatal_vars = ["DATABASE_URL", "ENCRYPTION_KEY"]
+    # WARNING: App stays up, but specific features (AI) will fail
+    degraded_vars = ["GROQ_API_KEY", "GEMINI_API_KEY", "REDIS_URL"]
+    
+    missing_fatal = [v for v in fatal_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
+    if missing_fatal:
+        logger.critical(f"FATAL: Missing critical environment variables: {', '.join(missing_fatal)}")
         import sys
         sys.exit(1)
-    logger.info("ENV_VALIDATION: All critical variables present.")
+        
+    missing_degraded = [v for v in degraded_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
+    if missing_degraded:
+        logger.warning(f"DEGRADED MODE: Missing optional variables {', '.join(missing_degraded)}. AI and Cache features may be disabled.")
+    else:
+        logger.info("ENV_VALIDATION: All system variables present.")
 
 # ... (CORS and logic remains the same)
 
