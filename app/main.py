@@ -186,20 +186,11 @@ if os.path.exists("/app/static/doctor"):
 if os.path.exists("/app/static/patient"):
     app.mount("/patient", StaticFiles(directory="/app/static/patient", html=True), name="patient")
 
-# --- Fallback / Redirect to Patient App ---
+# --- Fallback / Serve Patient App on Root ---
 @app.get("/")
-async def root_diagnostic():
-    """Nuclear diagnostic: Serve simple JSON to prove external connectivity."""
-    logger.info("EXTERNAL_HIT: Root route accessed successfully.")
-    return {"status": "operational", "message": "Mulajna Engine is Online", "timestamp": datetime.now().isoformat()}
-
-@app.get("/test-assets")
-async def test_assets():
-    """Verify if FileResponse is the problem."""
-    import os
-    index_path = "/app/static/patient/index.html"
-    exists = os.path.exists(index_path)
-    return {"path": index_path, "exists": exists}
+async def root_redirect():
+    """Serve Patient App directly on root."""
+    return FileResponse("/app/static/patient/index.html")
 
 @app.get("/doctor/")
 async def doctor_root():

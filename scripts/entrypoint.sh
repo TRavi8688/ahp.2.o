@@ -10,10 +10,7 @@ if [ "$SERVICE_TYPE" = "worker" ]; then
     exec python start_worker.py
 else
     echo "🌐 Starting Mulajna API on port $PORT..."
-    echo "🔍 DEBUG: Environment PORT is: $PORT"
-    # Reverting to IPv4 only for maximum proxy compatibility
-    # Explicitly using a hardcoded default if PORT is missing
-    TARGET_PORT=${PORT:-8080}
-    echo "📻 Binding to 0.0.0.0:$TARGET_PORT"
-    exec uvicorn app.main_simple:app --host "0.0.0.0" --port "$TARGET_PORT" --log-level debug --workers 1 --timeout-keep-alive 75
+    # RESTORING FULL APP: Single worker + standard asyncio loop for RAM stability
+    # 512MB RAM is now dedicated to this single process
+    exec uvicorn app.main:app --host "0.0.0.0" --port "$PORT" --log-level info --workers 1 --loop asyncio --timeout-keep-alive 75
 fi
