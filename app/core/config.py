@@ -53,15 +53,29 @@ class Settings(BaseSettings):
         import re
         def resolve_env_match(match):
             var_name = match.group(1) or match.group(2)
-            return os.environ.get(var_name, f"${{{var_name}}}") # Fallback to original if not found
+            val = os.environ.get(var_name)
+            if val is not None:
+                return val
+            # Fallback to defaults or return empty string so it doesn't break DNS
+            defaults = {"DB_PORT": "5432", "DB_HOST": "localhost", "DB_NAME": "postgres", "DB_SCHEMA": "public"}
+            return defaults.get(var_name, "")
             
         url = re.sub(r"\$\{([^}]+)\}", resolve_env_match, url)
         url = re.sub(r"\$([a-zA-Z_][a-zA-Z0-9_]*)", resolve_env_match, url)
         
         # 4. Final cleaning
         # Railway adds ?sslmode=disable which breaks asyncpg. Strip it.
-        if "?" in url and "sslmode" in url:
+        if "?" in url and ("sslmode" in url or "application_name" in url):
             url = url.split("?")[0]
+            
+        # Logging redacted URL for diagnosis
+        import urllib.parse as urlparse
+        try:
+            parsed = urlparse.urlparse(url)
+            redacted = parsed._replace(netloc=f"{parsed.username}:****@{parsed.hostname}:{parsed.port}").geturl()
+            logger.info(f"DATABASE_SYSLOG: Redacted URL: {redacted}")
+        except:
+            pass
             
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
