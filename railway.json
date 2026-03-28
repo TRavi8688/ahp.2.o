@@ -9,6 +9,7 @@
     "restartPolicyMaxRetries": 10,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
+    "healthcheckInterval": 30,
     "startCommand": "/entrypoint.sh",
     "numReplicas": 1
   }
