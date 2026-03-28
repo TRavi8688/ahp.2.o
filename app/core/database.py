@@ -62,6 +62,9 @@ def create_resilient_engine(url: str):
 primary_engine = create_resilient_engine(settings.async_database_url)
 secondary_engine = create_resilient_engine(os.environ.get("DATABASE_URL_SECONDARY")) if os.environ.get("DATABASE_URL_SECONDARY") else None
 
+# Backward compatibility for existing imports
+engine = primary_engine
+
 # --- BILLION-DOLLAR DB DEPENDENCY ---
 async def get_db():
     """High-Availability DB dependency with millisecond failover."""
