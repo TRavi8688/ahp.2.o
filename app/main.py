@@ -150,22 +150,25 @@ async def patient_root():
 
 @app.get("/")
 async def root_redirect():
-    """Verify Deployment on Root."""
-    return {"status": "full_deployment_active", "version": "STABLE-2026-03-28-VFINAL"}
+    """Serve Patient App on Root."""
+    # Prioritize index.html for React/Expo entry
+    return FileResponse("/app/static/patient/index.html")
 
-# 3. Catch-all for React/Expo Routing (SPAs)
-@app.get("/doctor/{rest_of_path:path}")
-async def doctor_spa_catchall(rest_of_path: str):
-    file_path = f"/app/static/doctor/{rest_of_path}"
-    if os.path.isfile(file_path):
-        return FileResponse(file_path)
-    return FileResponse("/app/static/doctor/index.html")
-
-@app.get("/patient/{rest_of_path:path}")
-async def patient_spa_catchall(rest_of_path: str):
-    file_path = f"/app/static/patient/{rest_of_path}"
-    if os.path.isfile(file_path):
-        return FileResponse(file_path)
+# 3. Catch-all for assets (Fixing 404s for _expo, etc)
+@app.get("/{rest_of_path:path}")
+async def global_asset_catchall(rest_of_path: str):
+    """Deep catch-all to ensure Expo/React assets load."""
+    # Check patient assets first
+    p_path = f"/app/static/patient/{rest_of_path}"
+    if os.path.isfile(p_path):
+        return FileResponse(p_path)
+        
+    # Check doctor assets second
+    d_path = f"/app/static/doctor/{rest_of_path}"
+    if os.path.isfile(d_path):
+        return FileResponse(d_path)
+        
+    # If not found, fallback to patient root for SPA routing
     return FileResponse("/app/static/patient/index.html")
 
 logger.info("FINAL_IMPORT_COMPLETE: app/main.py is fully loaded and ready.")
