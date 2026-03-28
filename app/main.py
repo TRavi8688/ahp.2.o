@@ -187,21 +187,31 @@ async def root_redirect():
     # Prioritize index.html for React/Expo entry
     return FileResponse("/app/static/patient/index.html")
 
-# 3. Catch-all for assets (Fixing 404s for _expo, etc)
+# 3. Catch-all for assets & SPA routing (Billion-Dollar Resilience)
 @app.get("/{rest_of_path:path}")
 async def global_asset_catchall(rest_of_path: str):
-    """Deep catch-all to ensure Expo/React assets load."""
-    # Check patient assets first
-    p_path = f"/app/static/patient/{rest_of_path}"
-    if os.path.isfile(p_path):
-        return FileResponse(p_path)
-        
-    # Check doctor assets second
-    d_path = f"/app/static/doctor/{rest_of_path}"
-    if os.path.isfile(d_path):
-        return FileResponse(d_path)
-        
-    # If not found, fallback to patient root for SPA routing
+    """Deep catch-all to ensure Expo/React assets load and handle SPA routing."""
+    # 1. First, check if the request is for a physical file in patient or doctor dirs
+    paths_to_check = [
+        f"/app/static/patient/{rest_of_path}",
+        f"/app/static/doctor/{rest_of_path}",
+        f"/app/static/{rest_of_path}"
+    ]
+    
+    for path in paths_to_check:
+        if os.path.isfile(path):
+            return FileResponse(path)
+
+    # 2. Second, if it's a file request (has an extension) and not found, return 404
+    # This prevents browsers from loading index.html as a .js file (White Screen fix)
+    file_extensions = ('.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.json', '.ico', '.woff', '.woff2', '.ttf')
+    if rest_of_path.lower().endswith(file_extensions):
+        logger.warning(f"ASSET_NOT_FOUND: {rest_of_path}")
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    # 3. Third, handle SPA routing: if no file extension, serve patient/index.html
+    # This ensures React/Expo Router can handle the URL client-side.
+    logger.info(f"SPA_REDIRECT: {rest_of_path} -> patient/index.html")
     return FileResponse("/app/static/patient/index.html")
 
 # 4. Billion-Dollar Global Shield (Error Catch-all)
