@@ -56,9 +56,15 @@ class Settings(BaseSettings):
             val = os.environ.get(var_name)
             if val is not None:
                 return val
-            # Fallback to defaults or return empty string so it doesn't break DNS
-            defaults = {"DB_PORT": "5432", "DB_HOST": "localhost", "DB_NAME": "postgres", "DB_SCHEMA": "public"}
-            return defaults.get(var_name, "")
+            # Fallback to defaults or Railway-specific PG variables
+            pg_fallback = {
+                "DB_HOST": os.environ.get("PGHOST", "localhost"),
+                "DB_PORT": os.environ.get("PGPORT", "5432"),
+                "DB_USER": os.environ.get("PGUSER", "postgres"),
+                "DB_PASSWORD": os.environ.get("PGPASSWORD", ""),
+                "DB_NAME": os.environ.get("PGDATABASE", "postgres")
+            }
+            return pg_fallback.get(var_name, "")
             
         url = re.sub(r"\$\{([^}]+)\}", resolve_env_match, url)
         url = re.sub(r"\$([a-zA-Z_][a-zA-Z0-9_]*)", resolve_env_match, url)
