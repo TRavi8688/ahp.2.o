@@ -59,18 +59,25 @@ async def startup_event():
 
 # --- Health Check ---
 @app.get("/health")
-async def health_check(request: Request):
-    """Liveness probe with header introspection."""
-    # Debug: Print headers to see what Railway is sending
-    logger.info(f"HEALTH_CHECK_QUERY: Headers: {dict(request.headers)}")
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "healthy", 
-            "version": "STABLE-2026-03-28-V99",
-            "timestamp": datetime.now().isoformat()
-        }
-    )
+async def health_check():
+    """Enterprise Health Check with DB Verification."""
+    db_status = "unknown"
+    try:
+        from sqlalchemy import text
+        from app.core.database import engine
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+        logger.error(f"HEALTH_CHECK_DB_FAILURE: {str(e)}")
+
+    return {
+        "status": "healthy" if "error" not in db_status else "degraded",
+        "database": db_status,
+        "version": "STABLE-2026-03-28-VMAX",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 @app.get("/metrics")
 async def get_metrics():
