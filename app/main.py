@@ -149,8 +149,8 @@ async def patient_root():
 
 @app.get("/")
 async def root_redirect():
-    """Standard Entry: Serve Patient App on Root."""
-    return FileResponse("/app/static/patient/index.html")
+    """Verify Deployment on Root."""
+    return {"status": "full_deployment_active", "version": "STABLE-2026-03-28-VFINAL"}
 
 # 3. Catch-all for React/Expo Routing (SPAs)
 @app.get("/doctor/{rest_of_path:path}")
