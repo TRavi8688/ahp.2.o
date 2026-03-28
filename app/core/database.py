@@ -1,4 +1,6 @@
+import os
 import time
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.exc import OperationalError
 from app.core.config import settings
@@ -92,5 +94,4 @@ async def get_db():
             logger.error(f"DATABASE_CRITICAL_FAILURE: All databases unreachable! {str(e)}")
             raise
 
-from sqlalchemy import text
-import os
+
