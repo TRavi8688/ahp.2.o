@@ -65,7 +65,11 @@ async def health_check(request: Request):
     logger.info(f"HEALTH_CHECK_QUERY: Headers: {dict(request.headers)}")
     return JSONResponse(
         status_code=200,
-        content={"status": "healthy", "timestamp": datetime.now().isoformat()}
+        content={
+            "status": "healthy", 
+            "version": "STABLE-2026-03-28-V99",
+            "timestamp": datetime.now().isoformat()
+        }
     )
 
 @app.get("/metrics")
