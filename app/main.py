@@ -73,26 +73,6 @@ async def get_metrics():
     """Minimal Metrics to avoid OOM."""
     return {"status": "optimized", "memory_usage": "slim"}
 
-@app.on_event("startup")
-async def validate_env():
-    """Validate critical environment variables at startup."""
-    # FATAL: App cannot function without these
-    fatal_vars = ["DATABASE_URL", "ENCRYPTION_KEY"]
-    # WARNING: App stays up, but specific features (AI) will fail
-    degraded_vars = ["GROQ_API_KEY", "GEMINI_API_KEY", "REDIS_URL"]
-    
-    missing_fatal = [v for v in fatal_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
-    if missing_fatal:
-        logger.critical(f"FATAL: Missing critical environment variables: {', '.join(missing_fatal)}")
-        import sys
-        sys.exit(1)
-        
-    missing_degraded = [v for v in degraded_vars if not os.getenv(v) and not getattr(settings, v.lower(), None)]
-    if missing_degraded:
-        logger.warning(f"DEGRADED MODE: Missing optional variables {', '.join(missing_degraded)}. AI and Cache features may be disabled.")
-    else:
-        logger.info("ENV_VALIDATION: All system variables present.")
-
 # --- Register Handlers ---
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -146,27 +126,41 @@ app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 # ===================================================================
 # UNIFIED STATIC FILE SERVING
 # ===================================================================
-# Mount built React/Expo apps
-# Dockerfile copies these to /app/static/doctor and /app/static/patient
-if os.path.exists("/app/static/doctor"):
-    app.mount("/doctor", StaticFiles(directory="/app/static/doctor", html=True), name="doctor")
-if os.path.exists("/app/static/patient"):
-    app.mount("/patient", StaticFiles(directory="/app/static/patient", html=True), name="patient")
+# 1. Mount the shared static folder for CSS/JS/Media
+if os.path.exists("/app/static"):
+    app.mount("/static-assets", StaticFiles(directory="/app/static"), name="static")
 
-# --- Fallback / Serve Patient App on Root ---
-@app.get("/")
-async def root_redirect():
-    """Serve Patient App directly on root."""
-    return FileResponse("/app/static/patient/index.html")
-
+# 2. Explicit Index Routes (The "Front Doors")
 @app.get("/doctor/")
+@app.get("/doctor")
 async def doctor_root():
-    """Ensure doctor root serves index.html."""
+    """Serve Doctor Dashboard."""
     return FileResponse("/app/static/doctor/index.html")
 
 @app.get("/patient/")
+@app.get("/patient")
 async def patient_root():
-    """Ensure patient root serves index.html."""
+    """Serve Patient Dashboard."""
+    return FileResponse("/app/static/patient/index.html")
+
+@app.get("/")
+async def root_redirect():
+    """Standard Entry: Serve Patient App on Root."""
+    return FileResponse("/app/static/patient/index.html")
+
+# 3. Catch-all for React/Expo Routing (SPAs)
+@app.get("/doctor/{rest_of_path:path}")
+async def doctor_spa_catchall(rest_of_path: str):
+    file_path = f"/app/static/doctor/{rest_of_path}"
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    return FileResponse("/app/static/doctor/index.html")
+
+@app.get("/patient/{rest_of_path:path}")
+async def patient_spa_catchall(rest_of_path: str):
+    file_path = f"/app/static/patient/{rest_of_path}"
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
     return FileResponse("/app/static/patient/index.html")
 
 logger.info("FINAL_IMPORT_COMPLETE: app/main.py is fully loaded and ready.")
