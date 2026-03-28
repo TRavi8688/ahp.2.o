@@ -9,12 +9,7 @@
     "restartPolicyMaxRetries": 10,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
-    "numReplicas": 1,
-    "envVars": {
-      "SERVICE_TYPE": {
-        "description": "Set to 'api' for web server or 'worker' for background tasks",
-        "default": "api"
-      }
-    }
+    "startCommand": "/entrypoint.sh",
+    "numReplicas": 1
   }
 }
