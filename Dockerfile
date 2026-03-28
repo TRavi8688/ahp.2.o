@@ -61,6 +61,9 @@ RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-interaction --no-ansi --no-root
 
 # Copy backend source code
+ENV APP_VERSION="2.0.1-STABLE"
+ENV MINIMAL_BOOT="false"
+
 COPY app/ ./app/
 
 # Copy built frontend apps from earlier stages
