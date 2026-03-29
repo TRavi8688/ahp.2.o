@@ -35,6 +35,10 @@
         "expo-font",
         "expo-secure-store",
         "expo-local-authentication"
-    ]
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    }
   }
 }

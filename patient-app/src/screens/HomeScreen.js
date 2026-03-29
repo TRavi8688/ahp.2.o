@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import { SecurityUtils } from '../utils/security';
 import { Theme, GlobalStyles } from '../theme';
+import { useSocket } from '../contexts/SocketContext';
+import { API_BASE_URL } from '../api';
 
 export default function HomeScreen({ navigation }) {
     const [profile, setProfile] = useState(null);

@@ -24,13 +24,11 @@ FROM node:18-alpine AS patient-build
 WORKDIR /build
 
 COPY patient-app/package.json patient-app/package-lock.json* ./
-RUN npm install 2>/dev/null || npm install --legacy-peer-deps
-
+RUN npm install --legacy-peer-deps
 COPY patient-app/ .
-# Empty string = relative URL (same domain as backend)
 ENV EXPO_PUBLIC_API_BASE_URL=""
 ENV CI=false
-RUN npx expo export --platform web
+RUN npx expo export --platform web --clear
 
 
 # --- STAGE 3: Python Backend + Serve Everything ---
