@@ -186,8 +186,8 @@ class ChatMessageResponse(BaseModel):
 
 class ReportAnalysisResponse(BaseModel):
     status: str = "success"
-    summary: str
-    extracted_data: dict
+    summary: Optional[str] = None
+    extracted_data: Optional[dict] = None
     visual_findings: Optional[str] = None
     url: str
     type: str = "Document"

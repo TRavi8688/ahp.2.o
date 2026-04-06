@@ -29,10 +29,8 @@ from app.core.database import get_db, engine
 from app.core.limiter import limiter
 from app.models.models import Base
 
-# --- Paths to pre-built frontend static files ---
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-DOCTOR_DIR = STATIC_DIR / "doctor"
-PATIENT_DIR = STATIC_DIR / "patient"
+# --- Paths to pre-built frontend static files REMOVED for Pure API Architecture ---
+# Logic moved to Nginx/Vercel for Three-Lane Highway.
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -47,11 +45,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 @app.on_event("startup")
 async def startup_event():
     """Startup diagnostics."""
-    logger.info(f"STARTUP: Checking assets at {STATIC_DIR}")
-    logger.info(f"DOCTOR_PATH_EXISTS: {DOCTOR_DIR.exists()}")
-    logger.info(f"PATIENT_PATH_EXISTS: {PATIENT_DIR.exists()}")
-    if DOCTOR_DIR.exists():
-        logger.info(f"DOCTOR_CONTENTS: {os.listdir(DOCTOR_DIR)}")
+    logger.info("STARTUP: Pure API Mode Active. Static serving handed off to Edge.")
 
 # @app.middleware("http")
 # async def observability_middleware(request: Request, call_next):
@@ -119,8 +113,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8081",
     "https://api.mulajna.com",
-    "https://ahp2o-production.up.railway.app",
-    "*" # Placeholder for initial testing, change to specific origins later
+    "https://ahp2o-production.up.railway.app"
 ]
 
 app.add_middleware(
@@ -161,58 +154,8 @@ app.include_router(profile.router, prefix=settings.API_V1_STR)
 app.include_router(doctor.router, prefix=settings.API_V1_STR)
 app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 
-# ===================================================================
-# UNIFIED STATIC FILE SERVING
-# ===================================================================
-# 1. Mount the shared static folder for CSS/JS/Media
-if os.path.exists("/app/static"):
-    app.mount("/static-assets", StaticFiles(directory="/app/static"), name="static")
-
-# 2. Explicit Index Routes (The "Front Doors")
-@app.get("/doctor/")
-@app.get("/doctor")
-async def doctor_root():
-    """Serve Doctor Dashboard."""
-    return FileResponse("/app/static/doctor/index.html")
-
-@app.get("/patient/")
-@app.get("/patient")
-async def patient_root():
-    """Serve Patient Dashboard."""
-    return FileResponse("/app/static/patient/index.html")
-
-@app.get("/")
-async def root_redirect():
-    """Serve Patient App on Root."""
-    # Prioritize index.html for React/Expo entry
-    return FileResponse("/app/static/patient/index.html")
-
-# 3. Catch-all for assets & SPA routing (Billion-Dollar Resilience)
-@app.get("/{rest_of_path:path}")
-async def global_asset_catchall(rest_of_path: str):
-    """Deep catch-all to ensure Expo/React assets load and handle SPA routing."""
-    # 1. First, check if the request is for a physical file in patient or doctor dirs
-    paths_to_check = [
-        f"/app/static/patient/{rest_of_path}",
-        f"/app/static/doctor/{rest_of_path}",
-        f"/app/static/{rest_of_path}"
-    ]
-    
-    for path in paths_to_check:
-        if os.path.isfile(path):
-            return FileResponse(path)
-
-    # 2. Second, if it's a file request (has an extension) and not found, return 404
-    # This prevents browsers from loading index.html as a .js file (White Screen fix)
-    file_extensions = ('.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.json', '.ico', '.woff', '.woff2', '.ttf')
-    if rest_of_path.lower().endswith(file_extensions):
-        logger.warning(f"ASSET_NOT_FOUND: {rest_of_path}")
-        raise HTTPException(status_code=404, detail="Asset not found")
-
-    # 3. Third, handle SPA routing: if no file extension, serve patient/index.html
-    # This ensures React/Expo Router can handle the URL client-side.
-    logger.info(f"SPA_REDIRECT: {rest_of_path} -> patient/index.html")
-    return FileResponse("/app/static/patient/index.html")
+# SPA serving removed. Backend now strictly handles /api/v1/*
+# Use Vercel, Netlify, or Nginx to serve the built static files.
 
 # 4. Billion-Dollar Global Shield (Error Catch-all)
 @app.middleware("http")

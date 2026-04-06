@@ -19,6 +19,9 @@ async def upload_to_s3_async(file_path: str, object_name: str) -> str:
     Async upload to InsForge Storage (AWS S3 Replacement).
     Essential for C1K concurrency to prevent event-loop blocking.
     """
+    if os.getenv("DEMO_MODE", "False") == "True":
+        return f"local://{object_name}"
+
     if not INSFORGE_KEY:
         return f"local://{object_name}"
 

@@ -1,0 +1,24 @@
+# AHP 2.0 System Hardening & Implementation Tasks
+
+- `[ ]` 1. Extract SPA & Configure Vercel Routing
+  - `[ ]` Create `doctor-app/vercel.json`
+  - `[ ]` Create `patient-app/vercel.json`
+- `[ ]` 2. Multi-Service Infrastructure Setup
+  - `[ ]` Create `railway.toml` for dedicated Worker/API scaling
+  - `[ ]` Delete old `railway.json`
+  - `[ ]` Optimize `Dockerfile` (multi-stage, non-root)
+  - `[ ]` Update `docker-compose.yml` for production readiness
+- `[ ]` 3. API Security & Routing Cleanup
+  - `[ ]` Remove SPA static serving (`app/main.py`)
+  - `[ ]` Fix CORS wildcard vulnerability
+  - `[ ]` Secure `/health` endpoint to prevent info leakage
+- `[ ]` 4. Authentication Hardening
+  - `[ ]` Remove `_otp_memory_store` RAM vulnerability (`app/api/auth.py`)
+  - `[ ]` Mandate Redis usage for OTPs
+- `[ ]` 5. Database Integrity & Performance
+  - `[ ]` Convert string models to PostgreSQL ENUMs (`app/models/models.py`)
+  - `[ ]` Convert JSON columns to JSONB
+- `[ ]` 6. Caching & Optimization
+  - `[ ]` Implement Redis caching for Patient Dashboard (`app/services/dashboard_service.py`)
+- `[ ]` 7. Observability & Analytics
+  - `[ ]` Add backend Sentry integration (`app/main.py`)

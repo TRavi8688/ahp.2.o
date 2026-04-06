@@ -145,20 +145,21 @@ async def upload_report(
     from app.services.s3_service import upload_to_s3_async
 
     # --- BIG PIPELINE: Global Backpressure (C1K Throttle) ---
-    try:
-        redis_bp = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
-        current_depth = await redis_bp.llen("arq:queue")
-        if current_depth > 500: # Increased from 50 for Big Pipeline capacity
-            logger.error(f"PIPELINE_CONGESTION: Queue depth {current_depth} > threshold 500.")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Chitti is analyzing a heavy backlog. Parallel pipelines are full. Please try in 2 mins.",
-                headers={"Retry-After": "120"}
-            )
-    except HTTPException:
-        raise
-    except Exception as bp_err:
-        logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}).")
+    if not settings.DEMO_MODE:
+        try:
+            redis_bp = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+            current_depth = await redis_bp.llen("arq:queue")
+            if current_depth > 500: # Increased from 50 for Big Pipeline capacity
+                logger.error(f"PIPELINE_CONGESTION: Queue depth {current_depth} > threshold 500.")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Chitti is analyzing a heavy backlog. Parallel pipelines are full. Please try in 2 mins.",
+                    headers={"Retry-After": "120"}
+                )
+        except HTTPException:
+            raise
+        except Exception as bp_err:
+            logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}).")
 
     try:
         # 1. Non-blocking parallel file IO
@@ -189,13 +190,15 @@ async def upload_report(
         await db.commit()
 
         # 4. ENQUEUE TO ARQ WORKER (Parallel Flow)
-        try:
-            redis = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
-            job = await redis.enqueue_job('process_medical_document_task', new_record.id, s3_object_name)
-            job_id = job.job_id
-        except Exception as queue_err:
-            logger.error(f"QUEUE_ERROR: {queue_err}")
-            job_id = "no_queue"
+        job_id = "demo_job_analysis"
+        if not settings.DEMO_MODE:
+            try:
+                redis = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+                job = await redis.enqueue_job('process_medical_document_task', new_record.id, s3_object_name)
+                job_id = job.job_id
+            except Exception as queue_err:
+                logger.error(f"QUEUE_ERROR: {queue_err}")
+                job_id = "no_queue"
 
         # Non-blocking cleanup
         await asyncio.to_thread(os.remove, temp_path)

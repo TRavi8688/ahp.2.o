@@ -3,23 +3,23 @@ import asyncio
 import os
 import json
 
-BASE_URL = "http://localhost:8005/api/v1"
+BASE_URL = "http://localhost:8000/api/v1"
 
 async def test_ride():
-    print("🚦 Starting System Test Drive...")
+    print("STARTING SYSTEM TEST DRIVE...")
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         # 1. Health Check
-        print("🔍 Checking API Liveness...")
+        print("CHECKING API LIVENESS...")
         try:
             resp = await client.get(f"http://localhost:8000/health")
-            print(f"✅ API Liveness: {resp.status_code}")
+            print(f"API Liveness: {resp.status_code}")
         except Exception as e:
-            print(f"❌ API OFFLINE: {e}")
+            print(f"API OFFLINE: {e}")
             return
 
         # 2. Register Test User
-        print("👤 Registering Test User...")
+        print("REGISTERING TEST USER...")
         user_data = {
             "email": f"tester_{os.getpid()}@example.com",
             "password": "Password123!",
@@ -29,23 +29,23 @@ async def test_ride():
         }
         resp = await client.post(f"{BASE_URL}/auth/register", json=user_data)
         if resp.status_code != 200:
-            print(f"❌ Registration Failed: {resp.text}")
+            print(f"Registration Failed: {resp.text}")
             return
-        print(f"✅ User Registered")
+        print(f"User Registered")
 
         # 3. Login
-        print("🔑 Logging In...")
+        print("LOGGING IN...")
         login_data = {"username": user_data["email"], "password": user_data["password"]}
         resp = await client.post(f"{BASE_URL}/auth/login", data=login_data)
         if resp.status_code != 200:
-            print(f"❌ Login Failed: {resp.text}")
+            print(f"Login Failed: {resp.text}")
             return
         token = resp.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        print(f"✅ Login Successful")
+        print(f"Login Successful")
 
         # 4. Upload & AI Extraction (Demo Mode)
-        print("📄 Testing Report Upload & AI Extraction...")
+        print("TESTING REPORT UPLOAD & AI EXTRACTION...")
         # Create a dummy file
         dummy_file = "test_report.jpg"
         with open(dummy_file, "w") as f:
@@ -59,32 +59,37 @@ async def test_ride():
             )
         
         if resp.status_code != 200:
-            print(f"❌ AI Extraction Failed: {resp.text}")
+            print(f"AI Extraction Failed: {resp.text}")
         else:
             data = resp.json()
-            print(f"✅ AI Analysis: {data.get('summary')}")
-            print(f"✅ Conditions: {data.get('extracted_data', {}).get('conditions')}")
+            if data:
+                print(f"AI Analysis: {data.get('summary', 'Pending...')}")
+                # Ensure extracted_data is handled safely even if None
+                extracted = data.get('extracted_data') or {}
+                print(f"Conditions: {extracted.get('conditions', 'N/A')}")
+            else:
+                print("AI Extraction: Response received (Empty)")
 
         # 5. Chat with Chitti
-        print("🤖 Testing Chitti AI Chat...")
+        print("TESTING CHITTI AI CHAT...")
         chat_data = {"text": "What should I do for my fever?", "language_code": "en-IN"}
         # Frontend uses Form data for chat
         resp = await client.post(f"{BASE_URL}/patient/chat", headers=headers, data=chat_data)
         if resp.status_code != 200:
-            print(f"❌ Chat Failed: {resp.text}")
+            print(f"Chat Failed: {resp.text}")
         else:
-            print(f"🤖 Chitti Response: {resp.json().get('ai_text')}")
+            print(f"Chitti Response: {resp.json().get('ai_text')}")
 
         # 6. Chat History
-        print("📜 Verifying Chat History...")
+        print("VERIFYING CHAT HISTORY...")
         resp = await client.get(f"{BASE_URL}/patient/chat-history", headers=headers)
         if resp.status_code == 200:
             history = resp.json()
-            print(f"✅ History count: {len(history)}")
+            print(f"History count: {len(history)}")
         else:
-            print(f"❌ History Fetch Failed: {resp.text}")
+            print(f"History Fetch Failed: {resp.text}")
 
-    print("\n🏁 Test Drive Complete!")
+    print("\nTEST DRIVE COMPLETE!")
 
 if __name__ == "__main__":
     asyncio.run(test_ride())

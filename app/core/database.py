@@ -64,6 +64,7 @@ secondary_engine = create_resilient_engine(os.environ.get("DATABASE_URL_SECONDAR
 
 # Backward compatibility for existing imports
 engine = primary_engine
+AsyncSessionLocal = async_sessionmaker(primary_engine, expire_on_commit=False, class_=AsyncSession)
 
 # --- BILLION-DOLLAR DB DEPENDENCY ---
 async def get_db():

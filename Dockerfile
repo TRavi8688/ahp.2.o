@@ -40,4 +40,5 @@ RUN mkdir -p /app/secure_uploads /app/uploads
 EXPOSE 8080
 
 # Command is provided by railway.toml (api vs worker)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Command — uses Railway's $PORT or defaults to 8080
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

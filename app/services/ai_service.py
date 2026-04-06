@@ -382,6 +382,17 @@ class AsyncAIService:
         AI Engine with multi-provider failover and Regional Language Support.
         Priority: InsForge (free, reliable) -> Anthropic -> Groq -> Gemini
         """
+        if os.getenv("DEMO_MODE", "False") == "True":
+            logger.info("DEMO_MODE: Bypassing AI Engine with Mock Response.")
+            if force_json:
+                return json.dumps({
+                    "conditions": [{"name": "Mild Viral Fever", "severity": "mild"}],
+                    "medications": [{"name": "Paracetamol 500mg", "dosage": "Twice daily"}],
+                    "lab_results": [{"test": "Hemoglobin", "result": "13.5 g/dL"}],
+                    "answer": "I've analyzed your report. Everything looks stable."
+                })
+            return "CLINICAL SUMMARY: Patient presents with symptoms of a viral infection. Rest is recommended."
+
         if image_bytes:
             # Vision-capable models for image analysis
             providers = [

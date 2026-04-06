@@ -25,7 +25,7 @@ async def log_audit_action(
         audit_entry = AuditLog(
             action=action,
             user_id=user_id,
-            resource_type=resource_type,
+            resource_type=resource_type or "SYSTEM",
             resource_id=resource_id,
             patient_id=patient_id,
             details=details,

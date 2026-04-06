@@ -19,19 +19,8 @@ from app.core.audit import log_audit_action
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# In-memory OTP fallback when Redis is unavailable
-# Format: {cache_key: (otp, expires_at)}
-_otp_memory_store: dict = {}
-
-def _memory_otp_set(key: str, value: str, expire: int = 300):
-    _otp_memory_store[key] = (value, time.time() + expire)
-
-def _memory_otp_get(key: str):
-    entry = _otp_memory_store.get(key)
-    if entry and time.time() < entry[1]:
-        return entry[0]
-    _otp_memory_store.pop(key, None)
-    return None
+# --- In-Memory OTP Fallback REMOVED ---
+# Mandatory Redis enforcement for Multi-Server Scalability in Production.
 
 
 def throw_auth_exception(detail: str):
@@ -84,9 +73,18 @@ async def register(
     db.add(new_user)
     await db.flush()
     
-    # No longer creating skeleton Patient here. 
-    # Profile creation is handled in the dedicated /profile/setup-patient onboarding step.
-    
+    # --- DEMO_MODE: Auto-Setup Patient Profile for Test Drive ---
+    if settings.DEMO_MODE and new_user.role == "patient":
+        logger.info(f"DEMO_MODE: Auto-creating skeleton patient profile for user {new_user.id}")
+        import uuid
+        skeleton_patient = models.Patient(
+            user_id=new_user.id,
+            ahp_id=f"AHP-{uuid.uuid4().hex[:8].upper()}",
+            phone_number="5550199",
+            language_code="en"
+        )
+        db.add(skeleton_patient)
+
     await db.commit()
     await db.refresh(new_user)
     await log_audit_action(
@@ -120,7 +118,7 @@ async def login(
     access_token = security.create_access_token(user.id, user.role)
     refresh_token = security.create_refresh_token(user.id, user.role)
     
-    await log_audit_action(db, "LOGIN_SUCCESS", user_id=user.id)
+    await log_audit_action(db, "LOGIN_SUCCESS", user_id=user.id, resource_type="USER")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -135,16 +133,13 @@ async def send_otp(req: schemas.OTPRequest):
 
     otp = "".join([str(secrets.randbelow(10)) for _ in range(6)])
     
-    # --- Persistence ---
+    # --- Persistence (Redis Only) ---
     cache_key = f"otp:{req.identifier}"
     try:
-        if settings.USE_REDIS:
-            await redis_service.set(cache_key, otp, expire=300)
-        else:
-            _memory_otp_set(cache_key, otp, expire=300)
+        await redis_service.set(cache_key, otp, expire=300)
     except Exception as e:
-        logger.error(f"OTP_CACHE_FAILURE: Using memory fallback. Error: {e}")
-        _memory_otp_set(cache_key, otp, expire=300)
+        logger.error(f"OTP_CACHE_FAILURE: Redis is required for production scaling. Error: {e}")
+        raise HTTPException(status_code=500, detail="Secure Persistence Layer (Redis) Unavailable.")
 
     # --- Delivery ---
     if req.method == "sms":
@@ -175,15 +170,10 @@ async def verify_otp(
     stored_otp = None
     if not is_master_otp:
         try:
-            if settings.USE_REDIS:
-                stored_otp = await redis_service.get(cache_key)
-                if not stored_otp:
-                    stored_otp = _memory_otp_get(cache_key)
-            else:
-                stored_otp = _memory_otp_get(cache_key)
+            stored_otp = await redis_service.get(cache_key)
         except Exception as e:
-            logger.error(f"OTP_VERIFY_CACHE_FAILURE: Falling back to memory. Error: {e}")
-            stored_otp = _memory_otp_get(cache_key)
+            logger.error(f"OTP_VERIFY_CACHE_FAILURE: Redis required. Error: {e}")
+            throw_auth_exception("Authentication system (Redis) is temporarily unavailable.")
 
     if not is_master_otp and (not stored_otp or stored_otp != otp):
         await log_audit_action(
@@ -202,14 +192,11 @@ async def verify_otp(
         throw_auth_exception("User record not found")
 
     user.is_active = True
-    # Clean up OTP from cache after successful verification
+    # Clean up OTP from Redis after successful verification
     try:
-        if settings.USE_REDIS:
-            await redis_service.delete(cache_key)
-        else:
-            _otp_memory_store.pop(cache_key, None)
-    except:
-        _otp_memory_store.pop(cache_key, None)
+        await redis_service.delete(cache_key)
+    except Exception as e:
+        logger.warning(f"OTP_CLEANUP_FAILURE: {e}")
 
     await db.commit()
     

@@ -1,0 +1,24 @@
+# AHP 2.0 Production Service Mesh (Three-Lane Highway)
+# ---------------------------------------------------
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+# LANE 1: The Secure API (Web Service)
+# This service handles all user traffic and data operations.
+[deploy]
+name = "api"
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+
+# LANE 2: The AI Worker (Background Service)
+# This service handles heavy AI document processing (OCR, Summarization).
+# It does not expose a public URL.
+[[services]]
+name = "worker"
+startCommand = "arq app.workers.arq_worker.WorkerSettings"
+restartPolicyType = "ALWAYS"
+# No healthcheck needed for worker as it doesn't serve HTTP
