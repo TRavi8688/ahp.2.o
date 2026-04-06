@@ -1,37 +1,8 @@
 # ===================================================================
-# AHP 2.0 — Unified Production Dockerfile
-# Builds: Backend API + Doctor App + Patient App
-# One container. One deployment. Everything works.
+# AHP 2.0 — Pure API & AI Worker (Unified Engine)
+# Optimized for Three-Lane Highway Architecture
 # ===================================================================
 
-# --- STAGE 1: Build Doctor App (React/CRA) ---
-FROM node:18-alpine AS doctor-build
-WORKDIR /build
-
-COPY doctor-app/package.json doctor-app/package-lock.json* ./
-RUN npm install --legacy-peer-deps --ignore-scripts 2>/dev/null || npm install --legacy-peer-deps
-
-COPY doctor-app/ .
-# Empty string = relative URL (same domain as backend)
-ENV REACT_APP_API_BASE_URL=""
-ENV REACT_APP_WS_BASE_URL=""
-ENV CI=false
-RUN npm run build
-
-
-# --- STAGE 2: Build Patient App (Expo Web) ---
-FROM node:18-alpine AS patient-build
-WORKDIR /build
-
-COPY patient-app/package.json patient-app/package-lock.json* ./
-RUN npm install --legacy-peer-deps
-COPY patient-app/ .
-ENV EXPO_PUBLIC_API_BASE_URL=""
-ENV CI=false
-RUN npx expo export --platform web --clear
-
-
-# --- STAGE 3: Python Backend + Serve Everything ---
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -41,7 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (Heavy dependencies for AI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -56,23 +27,17 @@ RUN pip install --no-cache-dir "poetry==$POETRY_VERSION"
 # Copy backend dependencies
 COPY pyproject.toml poetry.lock* README.md* ./
 RUN poetry config virtualenvs.create false && \
+    poetry lock && \
     poetry install --only main --no-interaction --no-ansi --no-root
 
 # Copy backend source code
 COPY app/ ./app/
 
-# Copy built frontend apps from earlier stages
-COPY --from=doctor-build /build/build /app/static/doctor
-COPY --from=patient-build /build/dist /app/static/patient
-
-# Create necessary directories
+# Create necessary directories for health-checks and secure processing
 RUN mkdir -p /app/secure_uploads /app/uploads
-
-# Start the system
-COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 # Expose the default port (overridden by Railway $PORT)
 EXPOSE 8080
 
-ENTRYPOINT ["/entrypoint.sh"]
+# Command is provided by railway.toml (api vs worker)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
