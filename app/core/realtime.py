@@ -33,8 +33,9 @@ class ConnectionManager:
         self.active_connections[user_id].add(websocket)
         logger.info(f"User {user_id} connected. Active connections: {len(self.active_connections[user_id])}")
         
-        # Start the pubsub listener if it's not running
-        if self.pubsub_task is None:
+        # Start the pubsub listener ONLY if Redis is enabled
+        from app.core.config import settings
+        if settings.USE_REDIS and self.pubsub_task is None:
             self.pubsub_task = asyncio.create_task(self._listen_to_redis())
 
     def disconnect(self, user_id: int, websocket: WebSocket):

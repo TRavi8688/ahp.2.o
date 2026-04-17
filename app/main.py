@@ -14,9 +14,20 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging import setup_logging, logger
+import sentry_sdk
 
 # Initialize Logging First
 setup_logging()
+
+# Initialize Sentry for Enterprise Observability
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+    logger.info("STARTUP: Sentry Observability Enabled.")
+
 logger.info("STARTUP: AHP 2.0 API Enterprise Initialization...")
 
 # --- OpenTelemetry REMOVED for RAM optimization ---
@@ -154,24 +165,49 @@ app.include_router(profile.router, prefix=settings.API_V1_STR)
 app.include_router(doctor.router, prefix=settings.API_V1_STR)
 app.include_router(doctor_verification.router, prefix=settings.API_V1_STR)
 
+# ===================================================================
+# REAL-TIME WEBSOCKET BRIDGE
+# ===================================================================
+@app.websocket("/ws/{token}")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    """
+    Secure WebSocket Bridge for Real-time Notifications & Chat.
+    Enforces JWT validation before accepting the hand-shake.
+    """
+    from app.core import security
+    
+    # 1. Validate Token
+    payload = security.decode_token(token, token_type="access")
+    if not payload:
+        logger.warning("WS_AUTH_FAIL: Invalid or expired token attempted connection.")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    user_id = int(payload.get("sub"))
+    
+    # 2. Accept & Register Connection
+    try:
+        await manager.connect(user_id, websocket)
+        
+        # Keep connection alive and listen for incoming heartbeats or client messages
+        while True:
+            # We don't expect much client-to-server WS traffic yet, but we must listen to detect disconnects
+            data = await websocket.receive_text()
+            # Simple Echo/Ping for latency testing
+            if data == "ping":
+                await websocket.send_text('{"type": "pong"}')
+                
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, websocket)
+        logger.info(f"WS_DISCONNECT: User {user_id} disconnected.")
+    except Exception as e:
+        logger.error(f"WS_ERROR: {str(e)}")
+        manager.disconnect(user_id, websocket)
+
 # SPA serving removed. Backend now strictly handles /api/v1/*
 # Use Vercel, Netlify, or Nginx to serve the built static files.
 
-# 4. Billion-Dollar Global Shield (Error Catch-all)
-@app.middleware("http")
-async def global_exception_shield(request: Request, call_next):
-    try:
-        return await call_next(request)
-    except Exception as e:
-        logger.error(f"GLOBAL_SHIELD_CAUGHT: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "Internal System Optimization In Progress",
-                "message": "We are currently hardening the system for billion-dollar scale. Please try again in 30 seconds.",
-                "trace_id": datetime.utcnow().timestamp()
-            }
-        )
+# The legacy "Billion-Dollar Global Shield" has been removed in favor of Sentry telemetry.
+# Unhandled 500s will now correctly bubble up to Sentry while FastAPI handles the standard 500 response natively.
 
-logger.info("🛡️ BILLION-DOLLAR SHIELD ACTIVE: Mulajna is now crash-proof.")
 logger.info("FINAL_IMPORT_COMPLETE: app/main.py is fully loaded and ready.")

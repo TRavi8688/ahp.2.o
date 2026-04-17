@@ -9,7 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import axios from 'axios';
 import { SecurityUtils } from '../utils/security';
 import { Theme, GlobalStyles } from '../theme';
-import * as Haptics from 'expo-haptics';
+import { HapticUtils } from '../utils/haptics';
 
 export default function MyRecordsScreen({ navigation }) {
     const [records, setRecords] = useState([]);

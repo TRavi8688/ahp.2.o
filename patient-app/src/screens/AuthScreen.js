@@ -12,7 +12,7 @@ import { Theme, GlobalStyles } from '../theme';
 import { API_BASE_URL } from '../api';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import * as Haptics from 'expo-haptics';
+import { HapticUtils } from '../utils/haptics';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,7 +25,7 @@ export default function AuthScreen({ navigation }) {
     const [rememberMe, setRememberMe] = useState(false);
 
     const handleAhpLogin = async () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        HapticUtils.notificationAsync(HapticUtils.NotificationFeedbackType.Success);
         const ahp = ahpId.trim().toUpperCase();
         if (!ahp.startsWith('AHP-') || ahp.length < 8) {
             return Alert.alert('Invalid ID', 'Please enter a valid Mulajna ID.');

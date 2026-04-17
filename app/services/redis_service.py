@@ -17,10 +17,8 @@ class RedisService:
             try:
                 self._client = redis.from_url(settings.REDIS_URL, decode_responses=True)
             except Exception as e:
-                if not self.is_demo:
-                    logger.error(f"REDIS_CONNECTION_FAILURE: {e}")
-                    raise e
-                logger.info("REDIS_OFFLINE: Using Demo Mode Memory Store.")
+                logger.warning(f"REDIS_CONNECTION_FAILURE: {e}. Falling back to In-Memory store for this session.")
+                self.is_demo = True # Force memory mode for survival
         return self._client
 
     async def set(self, key: str, value: str, expire: int = 600):

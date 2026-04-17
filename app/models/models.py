@@ -1,9 +1,42 @@
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, Text, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, Text, func, Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
 from typing import List, Optional
+import enum
 from app.core.encryption import StringEncryptedType, TextEncryptedType
 
+class RoleEnum(str, enum.Enum):
+    patient = "patient"
+    doctor = "doctor"
+    admin = "admin"
+
+class LicenseStatusEnum(str, enum.Enum):
+    pending = "pending"
+    verified = "verified"
+    rejected = "rejected"
+
+class VerificationStatusEnum(str, enum.Enum):
+    pending = "pending"
+    basic_verified = "basic_verified"
+    identity_verified = "identity_verified"
+    otp_verified = "otp_verified"
+    completed = "completed"
+
+class QueueStatusEnum(str, enum.Enum):
+    waiting = "waiting"
+    active = "active"
+    completed = "completed"
+    cancelled = "cancelled"
+
+class AccessLevelEnum(str, enum.Enum):
+    read = "read"
+    write = "write"
+
+class AccessStatusEnum(str, enum.Enum):
+    requested = "requested"
+    granted = "granted"
+    revoked = "revoked"
 class Base(DeclarativeBase):
     pass
 
@@ -14,7 +47,7 @@ class User(Base):
     insforge_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(50)) # 'patient' or 'doctor'
+    role: Mapped[RoleEnum] = mapped_column(SQLEnum(RoleEnum), default=RoleEnum.patient)
     first_name: Mapped[Optional[str]] = mapped_column(String(100))
     last_name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -51,7 +84,7 @@ class Doctor(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     specialty: Mapped[Optional[str]] = mapped_column(String(100))
     license_number: Mapped[str] = mapped_column(String(100), unique=True)
-    license_status: Mapped[str] = mapped_column(String(50), default="pending") # pending, verified, rejected
+    license_status: Mapped[LicenseStatusEnum] = mapped_column(SQLEnum(LicenseStatusEnum), default=LicenseStatusEnum.pending)
     license_copy_url: Mapped[Optional[str]] = mapped_column(String(255))
     verification_notes: Mapped[Optional[str]] = mapped_column(Text)
     
@@ -65,7 +98,7 @@ class MedicalRecord(Base):
     type: Mapped[str] = mapped_column(String(50)) # 'document', 'scan', etc.
     file_url: Mapped[str] = mapped_column(String(255))
     raw_text: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
-    ai_extracted: Mapped[Optional[dict]] = mapped_column(JSON)
+    ai_extracted: Mapped[Optional[dict]] = mapped_column(JSONB)
     ai_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
     patient_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
     doctor_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
@@ -126,8 +159,8 @@ class DoctorAccess(Base):
     doctor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     doctor_name: Mapped[str] = mapped_column(String(255))
     clinic_name: Mapped[Optional[str]] = mapped_column(String(255))
-    access_level: Mapped[str] = mapped_column(String(50)) # 'read', 'write'
-    status: Mapped[str] = mapped_column(String(50)) # 'requested', 'granted', 'revoked'
+    access_level: Mapped[AccessLevelEnum] = mapped_column(SQLEnum(AccessLevelEnum), default=AccessLevelEnum.read)
+    status: Mapped[AccessStatusEnum] = mapped_column(SQLEnum(AccessStatusEnum), default=AccessStatusEnum.requested)
     granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -152,7 +185,7 @@ class AISummary(Base):
     one_page_summary: Mapped[str] = mapped_column(TextEncryptedType)
     patient_summary: Mapped[str] = mapped_column(TextEncryptedType)
     doctor_summary: Mapped[str] = mapped_column(TextEncryptedType)
-    structured_data: Mapped[dict] = mapped_column(JSON) # Dashboard analytics
+    structured_data: Mapped[dict] = mapped_column(JSONB) # Dashboard analytics
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 class PatientDashboard(Base):
@@ -160,7 +193,7 @@ class PatientDashboard(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), unique=True)
-    data: Mapped[dict] = mapped_column(JSON)  # Aggregated dashboard data (JSON)
+    data: Mapped[dict] = mapped_column(JSONB)  # Aggregated dashboard data
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     patient: Mapped["Patient"] = relationship(back_populates="dashboard")
@@ -188,7 +221,7 @@ class DoctorVerificationSession(Base):
     registration_number: Mapped[str] = mapped_column(String(100))
     state_medical_council: Mapped[str] = mapped_column(String(255))
     mobile_number: Mapped[str] = mapped_column(String(20))
-    status: Mapped[str] = mapped_column(String(50), default="pending") # pending, basic_verified, identity_verified, otp_verified, completed
+    status: Mapped[VerificationStatusEnum] = mapped_column(SQLEnum(VerificationStatusEnum), default=VerificationStatusEnum.pending)
     aadhaar_url: Mapped[Optional[str]] = mapped_column(String(255))
     selfie_url: Mapped[Optional[str]] = mapped_column(String(255))
     face_match_score: Mapped[Optional[float]] = mapped_column(default=0.0)
@@ -213,7 +246,7 @@ class QueueEntry(Base):
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
     doctor_id: Mapped[int] = mapped_column(ForeignKey("doctors.id"))
     clinic_name: Mapped[Optional[str]] = mapped_column(String(255))
-    status: Mapped[str] = mapped_column(String(50), default="waiting") # waiting, active, completed, cancelled
+    status: Mapped[QueueStatusEnum] = mapped_column(SQLEnum(QueueStatusEnum), default=QueueStatusEnum.waiting)
     token_number: Mapped[Optional[int]] = mapped_column()
     check_in_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

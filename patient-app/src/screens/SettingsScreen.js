@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { SecurityUtils } from '../utils/security';
-import * as Haptics from 'expo-haptics';
+import { API_BASE_URL } from '../api';
+import { HapticUtils } from '../utils/haptics';
 
 export default function SettingsScreen({ navigation }) {
     const [profile, setProfile] = useState(null);
@@ -32,7 +34,7 @@ export default function SettingsScreen({ navigation }) {
     }, []);
 
     const handleLogout = async () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        HapticUtils.impactAsync(HapticUtils.ImpactFeedbackStyle.Heavy);
         Alert.alert('Logout', 'Are you sure you want to logout from Mulajna?', [
             { text: 'Cancel', style: 'cancel' },
             {

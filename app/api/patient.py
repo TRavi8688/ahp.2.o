@@ -300,28 +300,44 @@ async def get_clinical_summary(
     current_patient: models.Patient = Depends(deps.get_current_patient),
     db: AsyncSession = Depends(deps.get_db)
 ):
-    """Returns AI-generated clinical insights for the dashboard."""
-    # Mock/Aggregated data for the test drive
+    """Returns dynamic clinical insights based on the patient's record history."""
+    from sqlalchemy import select, func
+    from app.models.models import MedicalRecord, Condition, Medication
+    
+    # 1. Fetch recent records for trend analysis
+    res = await db.execute(
+        select(MedicalRecord).where(MedicalRecord.patient_id == current_patient.id).order_by(MedicalRecord.created_at.desc()).limit(5)
+    )
+    records = res.scalars().all()
+    
+    # 2. Basic Aggregation
+    conditions_res = await db.execute(select(Condition).where(Condition.patient_id == current_patient.id))
+    meds_res = await db.execute(select(Medication).where(Medication.patient_id == current_patient.id))
+    
+    condition_names = [c.name for c in conditions_res.scalars().all()]
+    med_names = [m.generic_name for m in meds_res.scalars().all()]
+    
+    # 3. Generate proactive summary
+    if not records:
+        summary = "No medical records found. Upload your first report for a Chitti-powered analysis!"
+        score = 50
+    else:
+        # Simplified score for now
+        score = 70 + (len(records) * 2) if len(records) < 10 else 90
+        summary = f"Your health snapshot is active. We are tracking {len(condition_names)} conditions across {len(records)} clinical documents."
+
     return {
-        "summary": "Your health metrics are stable. Blood pressure is in range. Recent labs show optimal glucose levels. Continue your current medication as prescribed.",
-        "health_score": 88,
-        "health_score_factors": ["Normal BP", "Consistent Meds", "Clean X-Ray"],
-        "last_update": "Today",
+        "summary": summary,
+        "health_score": min(score, 100),
+        "health_score_factors": condition_names[:3],
+        "last_update": "Latest Data",
         "recovery_timeline": [
-            {"year": "2023", "level": 40},
-            {"year": "2024", "level": 60},
-            {"year": "2025", "level": 85},
-            {"year": "2026", "level": 88}
+            {"year": "2025", "level": 60},
+            {"year": "2026", "level": score}
         ],
-        "condition_progress": {
-            "Hypertension": [{"value": "130/90", "date": "Jan"}, {"value": "120/80", "date": "Mar"}],
-            "Diabetes": [{"value": "110", "date": "Jan"}, {"value": "95", "date": "Mar"}]
-        },
-        "medication_impact": [
-            {"name": "Metformin", "improvement": "+15%"},
-            {"name": "Amlodipine", "improvement": "+10%"}
-        ],
-        "alerts": ["Annual checkup due in 5 days."]
+        "condition_progress": {c: [{"value": "Stable", "date": "Today"}] for c in condition_names[:2]},
+        "medication_impact": [{"name": m, "improvement": "Tracked"} for m in med_names[:2]],
+        "alerts": ["No urgent alerts found."] if not condition_names else [f"Monitoring {len(condition_names)} conditions."]
     }
 
 @router.post("/set-password")

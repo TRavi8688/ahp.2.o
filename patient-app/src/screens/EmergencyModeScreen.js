@@ -1,9 +1,34 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
+import { SecurityUtils } from '../utils/security';
+import { API_BASE_URL } from '../api';
 
 export default function EmergencyModeScreen({ navigation }) {
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchEmergencyProfile = async () => {
+            try {
+                const token = await SecurityUtils.getToken();
+                if (token) {
+                    const response = await axios.get(`${API_BASE_URL}/patient/profile`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setProfile(response.data);
+                }
+            } catch (err) {
+                console.error("Emergency profile fetch error", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchEmergencyProfile();
+    }, []);
+
     return (
         <View style={styles.container}>
             <LinearGradient colors={['#991b1b', '#450a0a']} style={styles.content}>
@@ -41,18 +66,18 @@ export default function EmergencyModeScreen({ navigation }) {
                     </TouchableOpacity>
 
                     <View style={styles.infoCard}>
-                        <Text style={styles.infoTitle}>MY QUICK PROFILE</Text>
+                        <Text style={styles.infoTitle}>MY EMERGENCY PROFILE</Text>
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Blood Group:</Text>
-                            <Text style={styles.infoValue}>O +ve</Text>
+                            <Text style={styles.infoValue}>{profile?.blood_group || 'Not Set'}</Text>
                         </View>
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Allergies:</Text>
-                            <Text style={styles.infoValue}>Penicillin, Nuts</Text>
+                            <Text style={styles.infoValue}>{profile?.allergies || 'None Known'}</Text>
                         </View>
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Conditions:</Text>
-                            <Text style={styles.infoValue}>Diabetes Type 2</Text>
+                            <Text style={styles.infoValue}>{profile?.medical_conditions || 'None Declared'}</Text>
                         </View>
                     </View>
                 </ScrollView>
