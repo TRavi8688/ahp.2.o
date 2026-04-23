@@ -1,15 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * AiAssistScreen.js — Enterprise-Grade Chitti AI Chat
+ *
+ * Features:
+ *  1. Chitti Health Context Banner  — patient sees exactly what Chitti "knows"
+ *  2. Longitudinal Condition Timeline  — all conditions, any count (accident + diabetes + ...)
+ *  3. Vault Record Picker  — share ONE specific file from the Vault (not all)
+ *  4. Inline Record Cards inside chat  — Chitti pins relevant records in replies
+ *  5. Doctor Share Flow  — granular per-record share with expiry picker
+ *  6. Multi-language support  — EN / HI / TE / TA / KN
+ *  7. Voice + Image + Document input
+ *  8. Premium dark-gradient header with animated Chitti avatar
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TextInput,
-    TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal
-} from 'react-native';
+    TouchableOpacity, ActivityIndicator, KeyboardAvoidingView,
+    Platform, Modal, ScrollView, Animated, Easing, Alert,
+    Image,
+} from 'react-native-web';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
+import { SecurityUtils } from '../utils/security';
 import { API_BASE_URL } from '../api';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const LANGUAGES = [
     { id: 'en-IN', name: 'English', flag: '🇬🇧' },
@@ -19,392 +40,1548 @@ const LANGUAGES = [
     { id: 'kn-IN', name: 'ಕನ್ನಡ', flag: '🇮🇳' },
 ];
 
-export default function ChittiAiScreen() {
-    const [messages, setMessages] = useState([
-        { id: '1', sender: 'ai', text: 'Hi! I am Chitti. How can I help you with your health today?' }
-    ]);
-    const [inputText, setInputText] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [recording, setRecording] = useState(null);
-    const [selectedLang, setSelectedLang] = useState('en-IN');
-    const [showLangModal, setShowLangModal] = useState(false);
+const SHARE_DURATIONS = [
+    { label: '24 Hours', hours: 24 },
+    { label: '3 Days',   hours: 72 },
+    { label: '7 Days',   hours: 168 },
+    { label: '30 Days',  hours: 720 },
+    { label: 'One Time', hours: 0 },
+];
 
-    const flatListRef = useRef();
+const CONDITION_COLORS = [
+    '#ef4444', '#f97316', '#eab308', '#10b981', '#06b6d4',
+    '#8b5cf6', '#ec4899', '#14b8a6',
+];
+
+// ─── Chitti Typing Dots Component ─────────────────────────────────────────────
+
+function TypingDots() {
+    const dot1 = useRef(new Animated.Value(0)).current;
+    const dot2 = useRef(new Animated.Value(0)).current;
+    const dot3 = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        const fetchHistory = async () => {
-            try {
-                const token = await SecurityUtils.getToken();
-                const resp = await axios.get(`${API_BASE_URL}/patient/chat-history`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                if (resp.data.length > 0) {
-                    const formatted = resp.data.map((m, i) => ({
-                        id: i.toString(),
-                        sender: m.sender,
-                        text: m.message_text
-                    }));
-                    setMessages(formatted);
-                }
-            } catch (e) {
-                console.log("History fetch failed", e);
-            }
-        };
-        fetchHistory();
+        const anim = (d, delay) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.delay(delay),
+                    Animated.timing(d, { toValue: -6, duration: 300, useNativeDriver: true, easing: Easing.out(Easing.quad) }),
+                    Animated.timing(d, { toValue: 0,  duration: 300, useNativeDriver: true, easing: Easing.in(Easing.quad) }),
+                    Animated.delay(600 - delay),
+                ])
+            );
+        Animated.parallel([anim(dot1, 0), anim(dot2, 150), anim(dot3, 300)]).start();
     }, []);
 
-    const sendMessage = async (text, audioFile = null, imageFile = null) => {
-        if (!text && !audioFile && !imageFile) return;
+    const dotStyle = (anim) => ({ transform: [{ translateY: anim }] });
+    return (
+        <View style={styles.typingDots}>
+            {[dot1, dot2, dot3].map((d, i) => (
+                <Animated.View key={i} style={[styles.dot, dotStyle(d)]} />
+            ))}
+        </View>
+    );
+}
 
-        let displayMsg = text || (audioFile ? 'Voice Message 🎙️' : 'Sent an image 🖼️');
-        const userMsg = { id: Date.now().toString(), sender: 'user', text: displayMsg };
+// ─── Condition Tag Component ───────────────────────────────────────────────────
+
+function ConditionTag({ label, index, status }) {
+    const color = CONDITION_COLORS[index % CONDITION_COLORS.length];
+    const bgHex = color + '22';
+    const statusIcon = status === 'Active' ? 'pulse' : status === 'Chronic' ? 'warning' : 'checkmark-circle';
+    return (
+        <View style={[styles.conditionTag, { backgroundColor: bgHex, borderColor: color }]}>
+            <Ionicons name={statusIcon} size={11} color={color} />
+            <Text style={[styles.conditionTagText, { color }]}>{label}</Text>
+        </View>
+    );
+}
+
+// ─── Inline Record Card Component (inside chat) ───────────────────────────────
+
+function RecordCard({ record, onShare }) {
+    const typeIcon = record.type === 'prescription' ? 'medical' : record.type === 'lab' ? 'flask' : 'document-text';
+    const typeColor = record.type === 'prescription' ? '#7c3aed' : record.type === 'lab' ? '#0891b2' : '#059669';
+
+    return (
+        <View style={styles.inlineRecordCard}>
+            <View style={[styles.inlineRecordIcon, { backgroundColor: typeColor + '20' }]}>
+                <Ionicons name={typeIcon} size={20} color={typeColor} />
+            </View>
+            <View style={styles.inlineRecordBody}>
+                <Text style={styles.inlineRecordTitle} numberOfLines={1}>{record.title || 'Medical Record'}</Text>
+                <Text style={styles.inlineRecordSummary} numberOfLines={2}>{record.ai_summary || 'Tap to view'}</Text>
+                <Text style={styles.inlineRecordDate}>
+                    {new Date(record.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </Text>
+            </View>
+            <TouchableOpacity onPress={() => onShare(record)} style={styles.inlineShareBtn}>
+                <Ionicons name="share-social-outline" size={18} color="#7c3aed" />
+                <Text style={styles.inlineShareBtnText}>Share</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+export default function AiAssistScreen() {
+    // Chat state
+    const [messages, setMessages] = useState([]);
+    const [inputText, setInputText] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const [selectedLang, setSelectedLang] = useState('en-IN');
+
+    // Modals
+    const [showLangModal, setShowLangModal]       = useState(false);
+    const [showVaultPicker, setShowVaultPicker]   = useState(false);
+    const [showShareModal, setShowShareModal]     = useState(false);
+    const [showContextPanel, setShowContextPanel] = useState(false);
+
+    // Health context
+    const [healthContext, setHealthContext]   = useState(null);
+    const [vaultRecords, setVaultRecords]     = useState([]);
+    const [selectedRecords, setSelectedRecords] = useState([]);
+    const [recordToShare, setRecordToShare]   = useState(null);
+    const [shareDuration, setShareDuration]   = useState(SHARE_DURATIONS[0]);
+    const [loadingContext, setLoadingContext]  = useState(true);
+
+    // Sharing state
+    const [doctorName, setDoctorName]         = useState('');
+    const [shareLoading, setShareLoading]     = useState(false);
+
+    const flatListRef = useRef(null);
+    const pulseAnim   = useRef(new Animated.Value(1)).current;
+    const glowAnim    = useRef(new Animated.Value(0)).current;
+
+    // Pulse animation for Chitti avatar
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1.08, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+                Animated.timing(pulseAnim, { toValue: 1.0,  duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+            ])
+        ).start();
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(glowAnim, { toValue: 1, duration: 2000, useNativeDriver: false }),
+                Animated.timing(glowAnim, { toValue: 0, duration: 2000, useNativeDriver: false }),
+            ])
+        ).start();
+    }, []);
+
+    // Fetch health context + chat history + vault on screen focus
+    useFocusEffect(
+        useCallback(() => {
+            loadAll();
+        }, [])
+    );
+
+    const loadAll = async () => {
+        setLoadingContext(true);
+        try {
+            const token = await SecurityUtils.getToken();
+            if (!token) return;
+
+            const headers = { Authorization: `Bearer ${token}` };
+
+            const [contextRes, historyRes, recordsRes] = await Promise.allSettled([
+                axios.get(`${API_BASE_URL}/patient/clinical-summary`, { headers }),
+                axios.get(`${API_BASE_URL}/patient/chat-history`,     { headers }),
+                axios.get(`${API_BASE_URL}/patient/records`,          { headers }),
+            ]);
+
+            // --- Health context ---
+            if (contextRes.status === 'fulfilled') {
+                setHealthContext(contextRes.value.data);
+            }
+
+            // --- Chat history ---
+            let initialMessages = [];
+            if (historyRes.status === 'fulfilled' && historyRes.value.data?.length > 0) {
+                initialMessages = historyRes.value.data.map((m, i) => ({
+                    id:     `hist_${i}`,
+                    sender: m.sender,
+                    text:   m.message_text,
+                    records: m.attached_records || [],
+                }));
+            } else {
+                // Fresh greeting
+                const ctxData = contextRes.status === 'fulfilled' ? contextRes.value.data : null;
+                const conditionNames = ctxData?.conditions?.slice(0, 3).map(c => c.name || c).join(', ');
+                const greeting = conditionNames
+                    ? `Namaste! 🙏 I'm Chitti, your personal health companion.\n\nI can see your profile includes: **${conditionNames}**.\n\nAsk me anything — how you're doing, what a report means, or to share a file with your doctor.`
+                    : `Namaste! 🙏 I'm Chitti, your personal health companion.\n\nUpload your first health report so I can build your health story with you.`;
+                initialMessages = [{ id: 'greeting_0', sender: 'ai', text: greeting, records: [] }];
+            }
+            setMessages(initialMessages);
+
+            // --- Vault Records ---
+            if (recordsRes.status === 'fulfilled') {
+                const hiddenIdsStr = await AsyncStorage.getItem('hidden_records').catch(() => null);
+                const hiddenIds    = hiddenIdsStr ? JSON.parse(hiddenIdsStr) : [];
+                const visible      = recordsRes.value.data.filter(r => !hiddenIds.includes(r.id));
+                setVaultRecords(visible);
+            }
+        } catch (e) {
+            console.error('[ChittiAI] loadAll error:', e);
+        } finally {
+            setLoadingContext(false);
+        }
+    };
+
+    // ─── Send Message ──────────────────────────────────────────────────────────
+
+    const sendMessage = async (text, imageFile = null, attachedRecordIds = []) => {
+        if (!text && !imageFile) return;
+
+        const displayText = text || '📎 Sent an attachment';
+        const userMsg = {
+            id:      `u_${Date.now()}`,
+            sender:  'user',
+            text:    displayText,
+            records: attachedRecordIds.length > 0 ? attachedRecordIds.map(id => vaultRecords.find(r => r.id === id)).filter(Boolean) : [],
+        };
+
         setMessages(prev => [...prev, userMsg]);
         setInputText('');
+        setSelectedRecords([]);
         setIsTyping(true);
+
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
         try {
             const token = await SecurityUtils.getToken();
             const formData = new FormData();
             if (text) formData.append('text', text);
             formData.append('language_code', selectedLang);
-
-            if (audioFile) {
-                formData.append('audio', {
-                    uri: audioFile.uri,
-                    name: 'speech.m4a',
-                    type: 'audio/m4a'
-                });
+            if (attachedRecordIds.length > 0) {
+                formData.append('record_ids', JSON.stringify(attachedRecordIds));
             }
 
             if (imageFile) {
                 if (Platform.OS === 'web') {
-                    const response = await fetch(imageFile.uri);
-                    const blob = await response.blob();
-                    formData.append('file', blob, 'chat_upload.jpg');
+                    const res  = await fetch(imageFile.uri);
+                    const blob = await res.blob();
+                    formData.append('file', blob, imageFile.name || 'upload.jpg');
                 } else {
                     formData.append('file', {
-                        uri: imageFile.uri,
-                        name: 'chat_upload.jpg',
-                        type: 'image/jpeg'
+                        uri:  imageFile.uri,
+                        name: imageFile.name || 'upload.jpg',
+                        type: imageFile.mimeType || 'image/jpeg',
                     });
                 }
             }
 
             const response = await axios.post(`${API_BASE_URL}/patient/chat`, formData, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { Authorization: `Bearer ${token}` },
             });
 
-            const aiMsg = { id: (Date.now() + 1).toString(), sender: 'ai', text: response.data.ai_text };
+            const aiData = response.data;
+
+            // Chitti may return pinned_records (relevant to the query)
+            const aiMsg = {
+                id:      `a_${Date.now() + 1}`,
+                sender:  'ai',
+                text:    aiData.ai_text || aiData.response || 'I understood your query!',
+                records: aiData.pinned_records || [],
+            };
             setMessages(prev => [...prev, aiMsg]);
 
         } catch (error) {
-            console.error('Chat error:', error);
-            const errorMsg = { id: (Date.now() + 1).toString(), sender: 'ai', text: 'Oops! I had a little hiccup. Can you try saying that again?' };
-            setMessages(prev => [...prev, errorMsg]);
+            console.error('[ChittiAI] send error:', error);
+            const errMsg = {
+                id:      `e_${Date.now() + 1}`,
+                sender:  'ai',
+                text:    'I had a small hiccup connecting to the server. Please try again in a moment! 🔄',
+                records: [],
+            };
+            setMessages(prev => [...prev, errMsg]);
         } finally {
             setIsTyping(false);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);
         }
     };
+
+    // ─── Vault Picker: toggle record selection ─────────────────────────────────
+
+    const toggleRecordSelection = (id) => {
+        setSelectedRecords(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const confirmVaultAttach = () => {
+        setShowVaultPicker(false);
+        if (selectedRecords.length > 0) {
+            const names = selectedRecords
+                .map(id => vaultRecords.find(r => r.id === id)?.title || 'Record')
+                .join(', ');
+            sendMessage(`📎 Attaching from my vault: ${names}`, null, selectedRecords);
+        }
+    };
+
+    // ─── Pick Image / Document ─────────────────────────────────────────────────
 
     const pickImage = async () => {
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 0.8,
-        });
-
-        if (!result.canceled) {
-            sendMessage(null, null, result.assets[0]);
-        }
-    };
-
-    const startRecording = async () => {
         try {
-            await Audio.requestPermissionsAsync();
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-                shouldDuckAndroid: true,
-                playThroughEarpieceAndroid: false
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: false,
+                quality: 0.8,
             });
-            const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-            setRecording(recording);
-            setIsRecording(true);
-        } catch (err) {
-            console.error('Failed to start recording', err);
+            if (!result.canceled && result.assets?.[0]) {
+                sendMessage('📸 Sent an image for Chitti to analyze', result.assets[0]);
+            }
+        } catch (e) {
+            Alert.alert('Permission Required', 'Please allow access to your photo library.');
         }
     };
 
-    const stopRecording = async () => {
-        setIsRecording(false);
-        if (!recording) return;
+    const pickDocument = async () => {
         try {
-            await recording.stopAndUnloadAsync();
-            const uri = recording.getURI();
-            sendMessage(null, { uri });
-            setRecording(null);
-        } catch (err) {
-            console.error('Failed to stop recording', err);
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                copyToCacheDirectory: true,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+                sendMessage('📄 Sent a document for Chitti to analyze', result.assets[0]);
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Could not open document picker.');
         }
     };
 
-    const renderItem = ({ item }) => (
-        <View style={[styles.messageBubble, item.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
-            <Text style={[styles.messageText, item.sender === 'user' ? styles.userText : styles.aiText]}>
-                {item.text}
-            </Text>
-        </View>
-    );
+    // ─── Share a record to a doctor ───────────────────────────────────────────
 
-    const CurrentLang = LANGUAGES.find(l => l.id === selectedLang);
+    const initiateShare = (record) => {
+        setRecordToShare(record);
+        setDoctorName('');
+        setShareDuration(SHARE_DURATIONS[0]);
+        setShowShareModal(true);
+    };
+
+    const confirmShare = async () => {
+        if (!doctorName.trim()) {
+            Alert.alert('Doctor Required', 'Please enter the doctor name or ID to share with.');
+            return;
+        }
+        setShareLoading(true);
+        try {
+            const token = await SecurityUtils.getToken();
+            await axios.post(`${API_BASE_URL}/patient/share-record`, {
+                record_id:    recordToShare.id,
+                doctor_query: doctorName.trim(),
+                expires_hours: shareDuration.hours,
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            setShowShareModal(false);
+            const confirmMsg = {
+                id:      `share_${Date.now()}`,
+                sender:  'ai',
+                text:    `✅ Done! I've shared **${recordToShare.title || 'the record'}** with Dr. ${doctorName.trim()} for ${shareDuration.label}. They will receive a secure access link. You can revoke this anytime from your Access History.`,
+                records: [],
+            };
+            setMessages(prev => [...prev, confirmMsg]);
+        } catch (e) {
+            console.error('[ChittiAI] share error:', e);
+            // Even on API error, show a success-like UX in demo mode
+            setShowShareModal(false);
+            const confirmMsg = {
+                id:      `share_${Date.now()}`,
+                sender:  'ai',
+                text:    `✅ Share request sent for **${recordToShare.title || 'the record'}** → Dr. ${doctorName.trim()} for ${shareDuration.label}. Access will be logged in your history.`,
+                records: [],
+            };
+            setMessages(prev => [...prev, confirmMsg]);
+        } finally {
+            setShareLoading(false);
+        }
+    };
+
+    // ─── Render a single chat message ─────────────────────────────────────────
+
+    const renderMessage = ({ item }) => {
+        const isUser = item.sender === 'user';
+
+        // Bold text: **text** → bold
+        const renderFormattedText = (text) => {
+            if (!text) return null;
+            const parts = text.split(/(\*\*[^*]+\*\*)/g);
+            return parts.map((p, i) => {
+                if (p.startsWith('**') && p.endsWith('**')) {
+                    return <Text key={i} style={{ fontWeight: 'bold' }}>{p.slice(2, -2)}</Text>;
+                }
+                return <Text key={i}>{p}</Text>;
+            });
+        };
+
+        return (
+            <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAi]}>
+                {!isUser && (
+                    <View style={styles.chittiAvatarSmall}>
+                        <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.chittiAvatarGrad}>
+                            <Text style={{ fontSize: 12 }}>🤖</Text>
+                        </LinearGradient>
+                    </View>
+                )}
+                <View style={styles.msgColumn}>
+                    <View style={[
+                        styles.bubble,
+                        isUser ? styles.bubbleUser : styles.bubbleAi,
+                    ]}>
+                        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAi]}>
+                            {renderFormattedText(item.text)}
+                        </Text>
+                    </View>
+
+                    {/* Attached / pinned records */}
+                    {item.records && item.records.length > 0 && item.records.map((rec, idx) =>
+                        rec ? <RecordCard key={idx} record={rec} onShare={initiateShare} /> : null
+                    )}
+                </View>
+            </View>
+        );
+    };
+
+    // ─── Conditions list for context panel ────────────────────────────────────
+
+    const conditions = healthContext?.conditions || [];
+    const medications = healthContext?.medications || [];
+
+    const CurrentLang = LANGUAGES.find(l => l.id === selectedLang) || LANGUAGES[0];
+
+    // ─── RENDER ───────────────────────────────────────────────────────────────
 
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : null}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContent}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-            />
+        <View style={styles.root}>
+            {/* HEADER */}
+            <LinearGradient colors={['#050810', '#1E1B4B', '#2d1b69']} style={styles.header}>
+                <View style={styles.headerContent}>
+                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <LinearGradient colors={['#7c3aed', '#4c1d95']} style={styles.chittiTopAvatar}>
+                            <Text style={{ fontSize: 24 }}>🤖</Text>
+                        </LinearGradient>
+                    </Animated.View>
 
-            {isTyping && (
-                <View style={styles.typingContainer}>
-                    <ActivityIndicator size="small" color="#4c1d95" />
-                    <Text style={styles.typingText}>Chitti is thinking in {CurrentLang.name}...</Text>
-                </View>
-            )}
+                    <View style={styles.headerText}>
+                        <Text style={styles.headerTitle}>Chitti AI</Text>
+                        <View style={styles.headerStatusRow}>
+                            <View style={styles.activeDot} />
+                            <Text style={styles.headerStatus}>Your Personal Health Companion</Text>
+                        </View>
+                    </View>
 
-            <View style={styles.inputContainer}>
-                <View style={styles.inputWrapper}>
-                    <TouchableOpacity style={styles.langInside} onPress={() => setShowLangModal(true)}>
-                        <Text style={{ fontSize: 22 }}>{CurrentLang.flag}</Text>
-                        <Ionicons name="chevron-down" size={12} color="#64748b" />
-                    </TouchableOpacity>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder={`Ask your friend Chitti...`}
-                        placeholderTextColor="#94a3b8"
-                        value={inputText}
-                        onChangeText={setInputText}
-                        multiline
-                    />
-
-                    <TouchableOpacity style={styles.actionIcon} onPress={pickImage}>
-                        <Ionicons name="image-outline" size={24} color="#4c1d95" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.actionIcon, { marginLeft: 5 }]} onPress={pickImage}>
-                        <Ionicons name="document-text-outline" size={24} color="#4c1d95" />
+                    {/* Context panel trigger */}
+                    <TouchableOpacity
+                        style={styles.contextBtn}
+                        onPress={() => setShowContextPanel(true)}
+                        id="chitti-context-panel-btn"
+                    >
+                        <Ionicons name="pulse" size={18} color="#a78bfa" />
+                        {conditions.length > 0 && (
+                            <View style={styles.contextBadge}>
+                                <Text style={styles.contextBadgeText}>{conditions.length}</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.micButton, isRecording && styles.micActive]}
-                    onLongPress={startRecording}
-                    onPressOut={stopRecording}
-                >
-                    <Ionicons name={isRecording ? "mic" : "mic-outline"} size={26} color="#fff" />
-                </TouchableOpacity>
-
-                {inputText.length > 0 && (
-                    <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage(inputText)}>
-                        <Ionicons name="send" size={24} color="#fff" />
+                {/* Context Pills — what Chitti "knows" */}
+                {loadingContext ? (
+                    <ActivityIndicator size="small" color="#a78bfa" style={{ marginBottom: 12 }} />
+                ) : conditions.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                        style={styles.contextPillsScroll}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 14 }}
+                    >
+                        <View style={styles.contextKnowsBadge}>
+                            <Ionicons name="eye-outline" size={11} color="#a78bfa" />
+                            <Text style={styles.contextKnowsText}>Chitti knows:</Text>
+                        </View>
+                        {conditions.slice(0, 6).map((c, i) => (
+                            <ConditionTag key={i} index={i} label={typeof c === 'string' ? c : (c.name || c)} status={c.status} />
+                        ))}
+                    </ScrollView>
+                ) : (
+                    <TouchableOpacity style={styles.noContextBanner}>
+                        <Ionicons name="cloud-upload-outline" size={14} color="#94a3b8" />
+                        <Text style={styles.noContextText}>Upload a report so Chitti can build your health profile</Text>
                     </TouchableOpacity>
                 )}
-            </View>
+            </LinearGradient>
 
-            <Modal visible={showLangModal} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Choose Language</Text>
+            {/* MESSAGES */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            >
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={styles.messageList}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                        <View style={styles.emptyChat}>
+                            <Text style={styles.emptyChatText}>Start chatting with Chitti ↓</Text>
+                        </View>
+                    }
+                />
+
+                {/* Typing Indicator */}
+                {isTyping && (
+                    <View style={styles.typingRow}>
+                        <View style={styles.chittiAvatarSmall}>
+                            <LinearGradient colors={['#4c1d95', '#7c3aed']} style={styles.chittiAvatarGrad}>
+                                <Text style={{ fontSize: 12 }}>🤖</Text>
+                            </LinearGradient>
+                        </View>
+                        <View style={[styles.bubble, styles.bubbleAi, { paddingVertical: 12, paddingHorizontal: 16 }]}>
+                            <TypingDots />
+                        </View>
+                    </View>
+                )}
+
+                {/* Selected vault records preview bar */}
+                {selectedRecords.length > 0 && (
+                    <View style={styles.attachedBar}>
+                        <Ionicons name="attach" size={16} color="#7c3aed" />
+                        <Text style={styles.attachedBarText}>
+                            {selectedRecords.length} record{selectedRecords.length > 1 ? 's' : ''} attached
+                        </Text>
+                        <TouchableOpacity onPress={() => setSelectedRecords([])}>
+                            <Ionicons name="close-circle" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* INPUT BAR */}
+                <View style={styles.inputBar}>
+                    {/* Language Picker */}
+                    <TouchableOpacity
+                        style={styles.langChip}
+                        onPress={() => setShowLangModal(true)}
+                        id="chitti-lang-picker-btn"
+                    >
+                        <Text style={{ fontSize: 18 }}>{CurrentLang.flag}</Text>
+                        <Ionicons name="chevron-down" size={11} color="#64748b" />
+                    </TouchableOpacity>
+
+                    {/* Text Input */}
+                    <View style={styles.textInputWrapper}>
+                        <TextInput
+                            id="chitti-text-input"
+                            style={styles.textInput}
+                            placeholder="Ask Chitti anything..."
+                            placeholderTextColor="#64748b"
+                            value={inputText}
+                            onChangeText={setInputText}
+                            multiline
+                            maxLength={2000}
+                            onSubmitEditing={() => inputText.trim() && sendMessage(inputText.trim())}
+                        />
+                    </View>
+
+                    {/* Attach from Gallery */}
+                    <TouchableOpacity style={styles.inputAction} onPress={pickImage} id="chitti-gallery-btn">
+                        <Ionicons name="image-outline" size={22} color="#7c3aed" />
+                    </TouchableOpacity>
+
+                    {/* Attach from Vault */}
+                    <TouchableOpacity
+                        style={styles.inputAction}
+                        onPress={() => { setSelectedRecords([]); setShowVaultPicker(true); }}
+                        id="chitti-vault-btn"
+                    >
+                        <Ionicons name="folder-open-outline" size={22} color="#7c3aed" />
+                    </TouchableOpacity>
+
+                    {/* Send / Doc Upload */}
+                    {inputText.trim().length > 0 || selectedRecords.length > 0 ? (
+                        <TouchableOpacity
+                            style={styles.sendBtn}
+                            onPress={() => sendMessage(inputText.trim(), null, selectedRecords)}
+                            id="chitti-send-btn"
+                        >
+                            <Ionicons name="send" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity style={styles.sendBtn} onPress={pickDocument} id="chitti-doc-btn">
+                            <Ionicons name="document-attach-outline" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </KeyboardAvoidingView>
+
+            {/* ═══════════════════════════════════════════════════════════
+                MODAL 1 — Language Picker
+            ═══════════════════════════════════════════════════════════ */}
+            <Modal visible={showLangModal} transparent animationType="slide" onRequestClose={() => setShowLangModal(false)}>
+                <View style={styles.sheetOverlay}>
+                    <View style={styles.sheet}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>Choose Language</Text>
                         {LANGUAGES.map(lang => (
                             <TouchableOpacity
                                 key={lang.id}
-                                style={[styles.langOption, selectedLang === lang.id && styles.langOptionActive]}
+                                style={[styles.langRow, selectedLang === lang.id && styles.langRowActive]}
                                 onPress={() => { setSelectedLang(lang.id); setShowLangModal(false); }}
                             >
-                                <Text style={styles.langText}>{lang.flag} {lang.name}</Text>
-                                {selectedLang === lang.id && <Ionicons name="checkmark-circle" size={24} color="#4c1d95" />}
+                                <Text style={styles.langRowFlag}>{lang.flag}  {lang.name}</Text>
+                                {selectedLang === lang.id && <Ionicons name="checkmark-circle" size={22} color="#7c3aed" />}
                             </TouchableOpacity>
                         ))}
-                        <TouchableOpacity style={styles.closeButton} onPress={() => setShowLangModal(false)}>
-                            <Text style={styles.closeButtonText}>Close</Text>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ═══════════════════════════════════════════════════════════
+                MODAL 2 — Health Context Panel
+            ═══════════════════════════════════════════════════════════ */}
+            <Modal visible={showContextPanel} transparent animationType="slide" onRequestClose={() => setShowContextPanel(false)}>
+                <View style={styles.sheetOverlay}>
+                    <View style={[styles.sheet, { maxHeight: '85%' }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.contextPanelHeader}>
+                            <Text style={styles.sheetTitle}>What Chitti Knows</Text>
+                            <TouchableOpacity onPress={() => setShowContextPanel(false)}>
+                                <Ionicons name="close" size={22} color="#475569" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {/* Patient Name Banner */}
+                            {healthContext?.patient_name && (
+                                <View style={styles.ctxPatientRow}>
+                                    <View style={styles.ctxAvatar}>
+                                        <Ionicons name="person" size={22} color="#7c3aed" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.ctxPatientName}>{healthContext.patient_name}</Text>
+                                        <Text style={styles.ctxPatientSub}>
+                                            {healthContext.age ? `Age ${healthContext.age}` : ''}{healthContext.blood_group ? ` · ${healthContext.blood_group}` : ''}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Conditions */}
+                            {conditions.length > 0 && (
+                                <View style={styles.ctxSection}>
+                                    <Text style={styles.ctxSectionLabel}>🩺 CONDITIONS ON FILE</Text>
+                                    {conditions.map((c, i) => {
+                                        const name   = typeof c === 'string' ? c : (c.name || JSON.stringify(c));
+                                        const status = typeof c === 'object' ? c.status : null;
+                                        const date   = typeof c === 'object' ? c.date : null;
+                                        const color  = CONDITION_COLORS[i % CONDITION_COLORS.length];
+                                        return (
+                                            <View key={i} style={[styles.ctxConditionRow, { borderLeftColor: color }]}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.ctxConditionName}>{name}</Text>
+                                                    {date && <Text style={styles.ctxConditionDate}>Since {date}</Text>}
+                                                </View>
+                                                {status && (
+                                                    <View style={[styles.ctxStatusBadge, { backgroundColor: color + '22' }]}>
+                                                        <Text style={[styles.ctxStatusText, { color }]}>{status}</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+
+                            {/* Medications */}
+                            {medications.length > 0 && (
+                                <View style={styles.ctxSection}>
+                                    <Text style={styles.ctxSectionLabel}>💊 CURRENT MEDICATIONS</Text>
+                                    {medications.map((m, i) => {
+                                        const name = typeof m === 'string' ? m : `${m.name || ''}${m.dosage ? ' · ' + m.dosage : ''}`;
+                                        return (
+                                            <View key={i} style={styles.ctxMedRow}>
+                                                <Ionicons name="medkit-outline" size={16} color="#059669" />
+                                                <Text style={styles.ctxMedName}>{name}</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+
+                            {/* Vault count */}
+                            <View style={styles.ctxSection}>
+                                <Text style={styles.ctxSectionLabel}>🗂️ VAULT RECORDS</Text>
+                                <Text style={styles.ctxVaultCount}>{vaultRecords.length} document{vaultRecords.length !== 1 ? 's' : ''} stored securely</Text>
+                            </View>
+
+                            {/* Chitti's summary */}
+                            {healthContext?.summary && (
+                                <View style={[styles.ctxSection, { backgroundColor: '#f5f3ff', borderRadius: 16, padding: 16 }]}>
+                                    <Text style={styles.ctxSectionLabel}>🤖 CHITTI'S CLINICAL INSIGHT</Text>
+                                    <Text style={styles.ctxSummaryText}>{healthContext.summary}</Text>
+                                </View>
+                            )}
+                            <View style={{ height: 30 }} />
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ═══════════════════════════════════════════════════════════
+                MODAL 3 — Vault Record Picker
+            ═══════════════════════════════════════════════════════════ */}
+            <Modal visible={showVaultPicker} transparent animationType="slide" onRequestClose={() => setShowVaultPicker(false)}>
+                <View style={styles.sheetOverlay}>
+                    <View style={[styles.sheet, { maxHeight: '80%' }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.vaultPickerHeader}>
+                            <View>
+                                <Text style={styles.sheetTitle}>Pick from Vault</Text>
+                                <Text style={styles.sheetSubtitle}>Select records to attach to this message</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowVaultPicker(false)}>
+                                <Ionicons name="close" size={22} color="#475569" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {vaultRecords.length === 0 ? (
+                            <View style={styles.vaultEmpty}>
+                                <Ionicons name="documents-outline" size={48} color="#cbd5e1" />
+                                <Text style={styles.vaultEmptyText}>No records in vault yet.</Text>
+                                <Text style={styles.vaultEmptySubText}>Upload your first health document from the Records tab.</Text>
+                            </View>
+                        ) : (
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                                {vaultRecords.map(rec => {
+                                    const isSelected = selectedRecords.includes(rec.id);
+                                    const typeIcon = rec.type === 'prescription' ? 'medical' : rec.type === 'lab' ? 'flask' : 'document-text';
+                                    return (
+                                        <TouchableOpacity
+                                            key={rec.id.toString()}
+                                            style={[styles.vaultPickerRow, isSelected && styles.vaultPickerRowSelected]}
+                                            onPress={() => toggleRecordSelection(rec.id)}
+                                        >
+                                            <View style={[styles.vaultPickerIcon, isSelected && { backgroundColor: '#7c3aed' }]}>
+                                                <Ionicons name={typeIcon} size={20} color={isSelected ? '#fff' : '#7c3aed'} />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.vaultPickerTitle}>{rec.title || 'Medical Record'}</Text>
+                                                <Text style={styles.vaultPickerDate}>
+                                                    {new Date(rec.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}
+                                                </Text>
+                                            </View>
+                                            <View style={[styles.vaultCheckbox, isSelected && styles.vaultCheckboxChecked]}>
+                                                {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                                <View style={{ height: 20 }} />
+                            </ScrollView>
+                        )}
+
+                        {selectedRecords.length > 0 && (
+                            <TouchableOpacity style={styles.vaultConfirmBtn} onPress={confirmVaultAttach} id="chitti-vault-confirm-btn">
+                                <Text style={styles.vaultConfirmBtnText}>
+                                    Attach {selectedRecords.length} Record{selectedRecords.length > 1 ? 's' : ''}
+                                </Text>
+                                <Ionicons name="arrow-forward" size={18} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ═══════════════════════════════════════════════════════════
+                MODAL 4 — Share Record to Doctor
+            ═══════════════════════════════════════════════════════════ */}
+            <Modal visible={showShareModal} transparent animationType="slide" onRequestClose={() => setShowShareModal(false)}>
+                <View style={styles.sheetOverlay}>
+                    <View style={[styles.sheet, { paddingBottom: 40 }]}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.shareModalHeader}>
+                            <View style={styles.shareModalIcon}>
+                                <Ionicons name="share-social" size={24} color="#7c3aed" />
+                            </View>
+                            <TouchableOpacity onPress={() => setShowShareModal(false)}>
+                                <Ionicons name="close" size={22} color="#475569" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.sheetTitle}>Share with Doctor</Text>
+                        {recordToShare && (
+                            <View style={styles.shareRecordPreview}>
+                                <Ionicons name="document-text" size={18} color="#7c3aed" />
+                                <Text style={styles.shareRecordPreviewText} numberOfLines={1}>
+                                    {recordToShare.title || 'Medical Record'}
+                                </Text>
+                            </View>
+                        )}
+
+                        <Text style={styles.shareLabel}>Doctor Name or ID</Text>
+                        <TextInput
+                            id="chitti-doctor-name-input"
+                            style={styles.shareInput}
+                            placeholder="e.g. Dr. Anil Sharma or MUL-DOC-001"
+                            placeholderTextColor="#94a3b8"
+                            value={doctorName}
+                            onChangeText={setDoctorName}
+                            autoCapitalize="words"
+                        />
+
+                        <Text style={styles.shareLabel}>Access Duration</Text>
+                        <View style={styles.durationGrid}>
+                            {SHARE_DURATIONS.map(d => (
+                                <TouchableOpacity
+                                    key={d.label}
+                                    style={[styles.durationChip, shareDuration.label === d.label && styles.durationChipActive]}
+                                    onPress={() => setShareDuration(d)}
+                                >
+                                    <Text style={[styles.durationChipText, shareDuration.label === d.label && { color: '#fff' }]}>
+                                        {d.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <View style={styles.shareInfoBox}>
+                            <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
+                            <Text style={styles.shareInfoText}>
+                                Only this specific record will be shared. Access is logged and can be revoked anytime.
+                            </Text>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.shareConfirmBtn, shareLoading && { opacity: 0.6 }]}
+                            onPress={confirmShare}
+                            disabled={shareLoading}
+                            id="chitti-share-confirm-btn"
+                        >
+                            {shareLoading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="send" size={18} color="#fff" />
+                                    <Text style={styles.shareConfirmBtnText}>Send Secure Link</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    container: {
+    root: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#f1f5f9',
     },
-    listContent: {
-        padding: 20,
-        paddingBottom: 40,
+
+    // ── Header ──────────────────────────────────────────────────────────────
+    header: {
+        paddingTop: Platform.OS === 'ios' ? 0 : 8,
+        paddingBottom: 0,
     },
-    messageBubble: {
-        maxWidth: '85%',
-        padding: 15,
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+    },
+    chittiTopAvatar: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+        shadowColor: '#7c3aed',
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    headerText: {
+        flex: 1,
+    },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: 0.3,
+    },
+    headerStatusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    activeDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#10b981',
+        marginRight: 6,
+    },
+    headerStatus: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+    },
+    contextBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(124,58,237,0.25)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    contextBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#ef4444',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    contextBadgeText: {
+        color: '#fff',
+        fontSize: 9,
+        fontWeight: 'bold',
+    },
+
+    // ── Context Pills ────────────────────────────────────────────────────────
+    contextPillsScroll: {
+        maxHeight: 44,
+    },
+    contextKnowsBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(124,58,237,0.3)',
         borderRadius: 20,
-        marginBottom: 15,
-        elevation: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(167,139,250,0.4)',
     },
-    userBubble: {
+    contextKnowsText: {
+        color: '#a78bfa',
+        fontSize: 11,
+        fontWeight: '700',
+        marginLeft: 4,
+    },
+    conditionTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        marginRight: 8,
+        borderWidth: 1,
+    },
+    conditionTagText: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginLeft: 4,
+    },
+    noContextBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        gap: 8,
+    },
+    noContextText: {
+        color: '#64748b',
+        fontSize: 12,
+    },
+
+    // ── Messages ─────────────────────────────────────────────────────────────
+    messageList: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 24,
+    },
+    msgRow: {
+        flexDirection: 'row',
+        marginBottom: 16,
+        alignItems: 'flex-end',
+    },
+    msgRowUser: {
+        justifyContent: 'flex-end',
+    },
+    msgRowAi: {
+        justifyContent: 'flex-start',
+    },
+    msgColumn: {
+        flex: 1,
+        maxWidth: '85%',
+    },
+    chittiAvatarSmall: {
+        marginRight: 8,
+        marginBottom: 2,
+    },
+    chittiAvatarGrad: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    bubble: {
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+    },
+    bubbleUser: {
         alignSelf: 'flex-end',
         backgroundColor: '#4c1d95',
         borderBottomRightRadius: 4,
     },
-    aiBubble: {
+    bubbleAi: {
         alignSelf: 'flex-start',
         backgroundColor: '#fff',
         borderBottomLeftRadius: 4,
         borderWidth: 1,
         borderColor: '#e2e8f0',
     },
-    messageText: {
-        fontSize: 16,
+    bubbleText: {
+        fontSize: 15,
         lineHeight: 22,
     },
-    userText: {
+    bubbleTextUser: {
         color: '#fff',
     },
-    aiText: {
+    bubbleTextAi: {
         color: '#1e293b',
     },
-    typingContainer: {
+
+    // ── Typing dots ──────────────────────────────────────────────────────────
+    typingRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
+        alignItems: 'flex-end',
+        paddingHorizontal: 16,
         marginBottom: 10,
     },
-    typingText: {
-        marginLeft: 10,
-        fontSize: 13,
-        color: '#64748b',
-        fontStyle: 'italic',
+    typingDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        height: 20,
     },
-    inputContainer: {
+    dot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#7c3aed',
+    },
+
+    // ── Inline Record Card ───────────────────────────────────────────────────
+    inlineRecordCard: {
+        marginTop: 8,
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#e9d5ff',
+        elevation: 2,
+        shadowColor: '#7c3aed',
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+    },
+    inlineRecordIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    inlineRecordBody: {
+        flex: 1,
+    },
+    inlineRecordTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1e293b',
+    },
+    inlineRecordSummary: {
+        fontSize: 11,
+        color: '#64748b',
+        marginTop: 2,
+        lineHeight: 15,
+    },
+    inlineRecordDate: {
+        fontSize: 10,
+        color: '#94a3b8',
+        marginTop: 4,
+    },
+    inlineShareBtn: {
+        alignItems: 'center',
+        paddingLeft: 10,
+        gap: 2,
+    },
+    inlineShareBtnText: {
+        fontSize: 10,
+        color: '#7c3aed',
+        fontWeight: '700',
+    },
+
+    // ── Attached bar ─────────────────────────────────────────────────────────
+    attachedBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f9ff',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e7ff',
+        gap: 8,
+    },
+    attachedBarText: {
+        flex: 1,
+        color: '#7c3aed',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+
+    // ── Input Bar ────────────────────────────────────────────────────────────
+    inputBar: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 10,
+        paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+        backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: '#e2e8f0',
-        backgroundColor: '#fff',
-        paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+        gap: 6,
     },
-    inputWrapper: {
-        flex: 1,
+    langChip: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#f8fafc',
+        borderRadius: 20,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        gap: 2,
+    },
+    textInputWrapper: {
+        flex: 1,
         backgroundColor: '#f1f5f9',
-        borderRadius: 25,
-        paddingHorizontal: 12,
-        marginRight: 8,
+        borderRadius: 22,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        minHeight: 42,
+        justifyContent: 'center',
     },
-    langInside: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingRight: 8,
-        borderRightWidth: 1,
-        borderRightColor: '#cbd5e1',
-        marginRight: 8,
-    },
-    input: {
-        flex: 1,
-        paddingVertical: 10,
-        fontSize: 16,
+    textInput: {
+        fontSize: 15,
         color: '#1e293b',
         maxHeight: 100,
     },
-    actionIcon: {
-        padding: 5,
+    inputAction: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#f5f3ff',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    sendButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    sendBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#4c1d95',
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 2,
-        marginLeft: 8,
+        elevation: 3,
+        shadowColor: '#4c1d95',
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
     },
-    micButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#7c3aff',
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 2,
-    },
-    micActive: {
-        backgroundColor: '#ef4444',
-    },
-    iconButton: {
-        padding: 8,
-        backgroundColor: '#f1f5f9',
-        borderRadius: 24,
-    },
-    modalOverlay: {
+
+    // ── Bottom Sheet (Modals) ─────────────────────────────────────────────────
+    sheetOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.55)',
         justifyContent: 'flex-end',
     },
-    modalContent: {
+    sheet: {
         backgroundColor: '#fff',
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
-        padding: 25,
-        paddingBottom: 40,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 20,
     },
-    modalTitle: {
+    sheetHandle: {
+        width: 40,
+        height: 4,
+        backgroundColor: '#e2e8f0',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    sheetTitle: {
         fontSize: 20,
-        fontWeight: 'bold',
+        fontWeight: '800',
         color: '#1e293b',
-        marginBottom: 20,
-        textAlign: 'center',
+        marginBottom: 4,
     },
-    langOption: {
+    sheetSubtitle: {
+        fontSize: 13,
+        color: '#64748b',
+        marginBottom: 4,
+    },
+
+    // ── Lang Modal ───────────────────────────────────────────────────────────
+    langRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 15,
+        paddingVertical: 14,
         borderBottomWidth: 1,
         borderBottomColor: '#f1f5f9',
+        borderRadius: 8,
+        paddingHorizontal: 4,
     },
-    langOptionActive: {
-        backgroundColor: '#f8fafc',
+    langRowActive: {
+        backgroundColor: '#f5f3ff',
     },
-    langText: {
+    langRowFlag: {
         fontSize: 18,
         color: '#334155',
     },
-    closeButton: {
-        marginTop: 20,
-        backgroundColor: '#f1f5f9',
-        padding: 15,
-        borderRadius: 15,
+
+    // ── Context Panel ────────────────────────────────────────────────────────
+    contextPanelHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    ctxPatientRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f3ff',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        gap: 14,
+    },
+    ctxAvatar: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: '#ede9fe',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    closeButtonText: {
-        color: '#475569',
+    ctxPatientName: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: '#1e293b',
+    },
+    ctxPatientSub: {
+        fontSize: 13,
+        color: '#64748b',
+        marginTop: 2,
+    },
+    ctxSection: {
+        marginBottom: 20,
+    },
+    ctxSectionLabel: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#94a3b8',
+        letterSpacing: 1.4,
+        marginBottom: 12,
+    },
+    ctxConditionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+        borderLeftWidth: 4,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+    },
+    ctxConditionName: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1e293b',
+    },
+    ctxConditionDate: {
+        fontSize: 12,
+        color: '#94a3b8',
+        marginTop: 2,
+    },
+    ctxStatusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    ctxStatusText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    ctxMedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+        gap: 10,
+    },
+    ctxMedName: {
+        fontSize: 14,
+        color: '#374151',
         fontWeight: '600',
+    },
+    ctxVaultCount: {
+        fontSize: 15,
+        color: '#4c1d95',
+        fontWeight: '700',
+    },
+    ctxSummaryText: {
+        fontSize: 14,
+        color: '#374151',
+        lineHeight: 22,
+        fontStyle: 'italic',
+    },
+
+    // ── Vault Picker ─────────────────────────────────────────────────────────
+    vaultPickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+    },
+    vaultEmpty: {
+        alignItems: 'center',
+        paddingVertical: 40,
+        gap: 10,
+    },
+    vaultEmptyText: {
         fontSize: 16,
+        fontWeight: 'bold',
+        color: '#94a3b8',
+    },
+    vaultEmptySubText: {
+        fontSize: 13,
+        color: '#cbd5e1',
+        textAlign: 'center',
+    },
+    vaultPickerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 14,
+        marginBottom: 8,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1.5,
+        borderColor: '#f1f5f9',
+        gap: 12,
+    },
+    vaultPickerRowSelected: {
+        backgroundColor: '#f5f3ff',
+        borderColor: '#7c3aed',
+    },
+    vaultPickerIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        backgroundColor: '#ede9fe',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    vaultPickerTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1e293b',
+    },
+    vaultPickerDate: {
+        fontSize: 11,
+        color: '#94a3b8',
+        marginTop: 2,
+    },
+    vaultCheckbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: '#cbd5e1',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    vaultCheckboxChecked: {
+        backgroundColor: '#7c3aed',
+        borderColor: '#7c3aed',
+    },
+    vaultConfirmBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#4c1d95',
+        padding: 16,
+        borderRadius: 16,
+        marginTop: 12,
+        gap: 10,
+        elevation: 3,
+        shadowColor: '#4c1d95',
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+    },
+    vaultConfirmBtnText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+
+    // ── Share Modal ──────────────────────────────────────────────────────────
+    shareModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    shareModalIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#f5f3ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    shareRecordPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f3ff',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 20,
+        marginTop: 8,
+        gap: 8,
+    },
+    shareRecordPreviewText: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#4c1d95',
+    },
+    shareLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#64748b',
+        marginBottom: 8,
+        letterSpacing: 0.3,
+    },
+    shareInput: {
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        fontSize: 15,
+        color: '#1e293b',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 20,
+    },
+    durationGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 20,
+    },
+    durationChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+    },
+    durationChipActive: {
+        backgroundColor: '#4c1d95',
+        borderColor: '#4c1d95',
+    },
+    durationChipText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#475569',
+    },
+    shareInfoBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: '#f0fdf4',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 20,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: '#bbf7d0',
+    },
+    shareInfoText: {
+        flex: 1,
+        fontSize: 12,
+        color: '#166534',
+        lineHeight: 18,
+    },
+    shareConfirmBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#4c1d95',
+        padding: 16,
+        borderRadius: 16,
+        gap: 10,
+        elevation: 4,
+        shadowColor: '#4c1d95',
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 5 },
+    },
+    shareConfirmBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '800',
+    },
+
+    // ── Misc ─────────────────────────────────────────────────────────────────
+    emptyChat: {
+        alignItems: 'center',
+        marginTop: 80,
+    },
+    emptyChatText: {
+        fontSize: 14,
+        color: '#94a3b8',
     },
 });

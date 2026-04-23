@@ -3,7 +3,7 @@ import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app.api import deps
 from app.models import models
@@ -316,6 +316,15 @@ async def get_clinical_summary(
     
     condition_names = [c.name for c in conditions_res.scalars().all()]
     med_names = [m.generic_name for m in meds_res.scalars().all()]
+
+    # Build structured arrays for the frontend health context banner
+    condition_objects = [{"name": c.name, "status": "Active", "added_by": c.added_by} for c in conditions_res.scalars().all()] if False else []
+    medication_objects = [{"name": m.generic_name, "dosage": m.dosage or "", "frequency": m.frequency or ""} for m in meds_res.scalars().all()] if False else []
+    # Re-query since scalars were consumed above
+    conditions_res2 = await db.execute(select(Condition).where(Condition.patient_id == current_patient.id))
+    meds_res2 = await db.execute(select(Medication).where(Medication.patient_id == current_patient.id))
+    condition_objects = [{"name": c.name, "status": "Active", "added_by": c.added_by} for c in conditions_res2.scalars().all()]
+    medication_objects = [{"name": m.generic_name, "dosage": m.dosage or "", "frequency": m.frequency or ""} for m in meds_res2.scalars().all()]
     
     # 3. Generate proactive summary
     if not records:
@@ -330,6 +339,8 @@ async def get_clinical_summary(
         "summary": summary,
         "health_score": min(score, 100),
         "health_score_factors": condition_names[:3],
+        "conditions": condition_objects,
+        "medications": medication_objects,
         "last_update": "Latest Data",
         "recovery_timeline": [
             {"year": "2025", "level": 60},
@@ -501,6 +512,77 @@ async def revoke_access(
     await log_audit_action(db, "ACCESS_REVOKED", user_id=current_patient.user_id, details={"doctor": access_req.doctor_name})
     
     return {"status": "success", "message": f"Access revoked for {access_req.doctor_name}"}
+
+@router.post("/share-record")
+async def share_record_with_doctor(
+    data: schemas.ShareRecordRequest,
+    current_patient: models.Patient = Depends(deps.get_current_patient),
+    db: AsyncSession = Depends(deps.get_db)
+):
+    """Share a single specific medical record with a doctor (from Chitti AI chat)."""
+    import secrets
+    from datetime import timedelta
+
+    # 1. Verify the record belongs to this patient
+    stmt = select(models.MedicalRecord).where(
+        models.MedicalRecord.id == data.record_id,
+        models.MedicalRecord.patient_id == current_patient.id
+    )
+    result = await db.execute(stmt)
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found or does not belong to you.")
+
+    # 2. Try to resolve doctor by name or license number
+    doctor_user_id = None
+    doctor_stmt = select(models.Doctor).join(models.User).where(
+        or_(
+            models.User.first_name.ilike(f"%{data.doctor_query}%"),
+            models.User.last_name.ilike(f"%{data.doctor_query}%"),
+            models.Doctor.license_number.ilike(f"%{data.doctor_query}%")
+        )
+    )
+    doc_result = await db.execute(doctor_stmt)
+    doctor = doc_result.scalars().first()
+    if doctor:
+        doctor_user_id = doctor.user_id
+
+    # 3. Create share token
+    share_token = secrets.token_urlsafe(32)
+    expires_at = None
+    if data.expires_hours > 0:
+        expires_at = datetime.now() + timedelta(hours=data.expires_hours)
+
+    share = models.RecordShare(
+        patient_id=current_patient.id,
+        record_id=data.record_id,
+        doctor_query=data.doctor_query,
+        doctor_user_id=doctor_user_id,
+        share_token=share_token,
+        expires_at=expires_at
+    )
+    db.add(share)
+    await db.commit()
+
+    await log_audit_action(
+        db, 
+        "RECORD_SHARED", 
+        user_id=current_patient.user_id, 
+        resource_type="MEDICAL_RECORD",
+        details={
+            "record_id": data.record_id, 
+            "doctor_query": data.doctor_query,
+            "expires_hours": data.expires_hours,
+            "share_id": share.id
+        }
+    )
+
+    return {
+        "status": "success",
+        "share_id": share.id,
+        "share_token": share_token,
+        "message": f"Record shared securely with {data.doctor_query}"
+    }
 
 @router.get("/jobs/{job_id}")
 async def get_job_status(

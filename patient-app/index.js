@@ -1,27 +1,25 @@
-import { registerRootComponent } from 'expo';
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-
-function App() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>✅ Mulajna is alive</Text>
-    </View>
-  );
+// --- V15 STYLES SHIELD ---
+// This is the emergency polyfill that captures any missed library-level crashes.
+import * as ReactNativeWeb from 'react-native-web';
+if (typeof window !== 'undefined') {
+    window.StyleSheet = ReactNativeWeb.StyleSheet;
+    if (!window.StyleSheet.create) {
+        window.StyleSheet.create = (obj) => obj;
+    }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050810',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-    color: '#6366F1',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-});
+import { AppRegistry, Platform } from 'react-native-web';
+import App from './App';
 
-registerRootComponent(App);
+// --- MULAJNA PRODUCTION RESTORATION v15.0 ---
+if (Platform.OS === 'web') {
+    document.body.style.backgroundColor = '#050810';
+    AppRegistry.registerComponent('main', () => App);
+    AppRegistry.runApplication('main', {
+        initialProps: {},
+        rootTag: document.getElementById('root') || document.getElementById('main')
+    });
+} else {
+    const { registerRootComponent } = require('expo');
+    registerRootComponent(App);
+}

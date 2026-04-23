@@ -1,7 +1,7 @@
 // NOTE: expo-secure-store, expo-local-authentication, expo-screen-capture
 // are native-only. Do NOT import them at module level — they crash web bundles.
 // Use lazy requires inside Platform.OS checks instead.
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform } from 'react-native-web';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TOKEN_KEY = 'mulajna_auth_token'; 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native-web';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme, GlobalStyles } from '../theme';
 

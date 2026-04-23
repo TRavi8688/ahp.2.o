@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native-web';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +19,33 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 
+// -----------------------------------------------------------------------------------
+// ERROR BOUNDARY FOR RESILIENCE
+// -----------------------------------------------------------------------------------
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('[Fatal App Error]', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#050810', justifyContent: 'center', padding: 40 }}>
+          <Text style={{ color: '#EF4444', fontSize: 24, fontWeight: 'bold' }}>BOOT_CRITICAL: Mulajna System Failure</Text>
+          <Text style={{ color: '#94A3B8', marginTop: 20 }}>An unexpected error prevented the system from starting.</Text>
+          <Text style={{ color: '#FCD34D', marginTop: 20, fontFamily: 'monospace' }}>{this.state.error?.toString()}</Text>
+          <TouchableOpacity 
+            style={{ marginTop: 40, padding: 20, backgroundColor: '#6366F1', borderRadius: 12 }}
+            onPress={() => window.location.reload()}
+          >
+            <Text style={{ color: 'white', textAlign: 'center' }}>FORCED_RESTART</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Syne_800ExtraBold,
@@ -26,46 +53,61 @@ export default function App() {
   });
 
   const [initialRoute, setInitialRoute] = useState(null);
+  const [bootReady, setBootReady] = useState(false);
 
   useEffect(() => {
     const init = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
+        console.log('[App] Booting system...');
+        const token = await AsyncStorage.getItem('mulajna_auth_token');
+        console.log('[App] Token check:', token ? 'Session found' : 'No session');
         setInitialRoute(token ? 'MainTabs' : 'Login');
-        console.log('[Heartbeat 3] Session Context Initialized');
+        
+        const timer = setTimeout(() => {
+          setBootReady(true);
+        }, 1500);
+
+        if (fontsLoaded) {
+          setBootReady(true);
+          clearTimeout(timer);
+        }
       } catch (e) {
-        console.error('[App] Init Error:', e);
         setInitialRoute('Login');
+        setBootReady(true);
       }
     };
     init();
-  }, []);
+  }, [fontsLoaded]);
 
-  if (!fontsLoaded || !initialRoute) {
+  if (!bootReady || !initialRoute) {
     return (
       <View style={{ flex: 1, backgroundColor: '#050810', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#6366F1" />
+        <Text style={{ color: '#6366F1', fontSize: 42, letterSpacing: 10, fontWeight: '900' }}>MULAJNA</Text>
+        <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 20 }} />
+        <Text style={{ color: '#94A3B8', marginTop: 20, letterSpacing: 2 }}>SECURE BOOT INITIALIZING...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#050810' }}>
-      <SocketProvider>
-        <NavigationContainer>
-          <Stack.Navigator 
-            screenOptions={{ headerShown: false, animation: 'fade' }} 
-            initialRouteName={initialRoute}
-          >
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="EmergencyMode" component={EmergencyScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </SocketProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#050810' }}>
+        <SocketProvider>
+          <NavigationContainer>
+            <Stack.Navigator 
+              screenOptions={{ headerShown: false, animation: 'fade' }} 
+              initialRouteName={initialRoute}
+            >
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+              <Stack.Screen name="MainTabs" component={MainTabs} />
+              <Stack.Screen name="EmergencyMode" component={EmergencyScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </SocketProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

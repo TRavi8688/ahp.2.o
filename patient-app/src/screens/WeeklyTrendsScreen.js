@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native-web';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme, GlobalStyles } from '../theme';
 import { Svg, Polyline, Circle, Line } from 'react-native-svg';

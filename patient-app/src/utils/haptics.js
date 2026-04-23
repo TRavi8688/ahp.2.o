@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform } from 'react-native-web';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -34,7 +34,7 @@ export const HapticUtils = {
         }
     },
 
-    // Re-export Constants for convenience
-    NotificationFeedbackType: Haptics.NotificationFeedbackType,
-    ImpactFeedbackStyle: Haptics.ImpactFeedbackStyle,
+    // Re-export Constants for convenience with safe fallbacks
+    NotificationFeedbackType: Haptics?.NotificationFeedbackType || { Success: 'success', Warning: 'warning', Error: 'error' },
+    ImpactFeedbackStyle: Haptics?.ImpactFeedbackStyle || { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
 };

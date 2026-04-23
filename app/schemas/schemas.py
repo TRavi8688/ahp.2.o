@@ -217,3 +217,8 @@ class JobStatusResponse(BaseModel):
 
 class SetPasswordRequest(BaseModel):
     password: str
+
+class ShareRecordRequest(BaseModel):
+    record_id: int
+    doctor_query: str = Field(..., description="Doctor name or Mulajna ID")
+    expires_hours: int = 24

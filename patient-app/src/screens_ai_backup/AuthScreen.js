@@ -4,7 +4,7 @@ import {
     TouchableOpacity, ActivityIndicator, Alert,
     KeyboardAvoidingView, Platform, ScrollView, Dimensions,
     ImageBackground
-} from 'react-native';
+} from 'react-native-web';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { SecurityUtils } from '../utils/security';

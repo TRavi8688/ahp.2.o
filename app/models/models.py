@@ -165,6 +165,21 @@ class DoctorAccess(Base):
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+class RecordShare(Base):
+    """Granular per-record sharing from Chitti AI chat."""
+    __tablename__ = "record_shares"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    record_id: Mapped[int] = mapped_column(ForeignKey("medical_records.id"), index=True)
+    doctor_query: Mapped[str] = mapped_column(String(255))  # name or MUL-DOC-xxx
+    doctor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    share_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    accessed: Mapped[bool] = mapped_column(default=False)
+    revoked: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 class Notification(Base):
     __tablename__ = "notifications"
     

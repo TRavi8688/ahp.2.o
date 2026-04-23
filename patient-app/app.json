@@ -37,7 +37,7 @@
         "expo-local-authentication"
     ],
     "web": {
-      "bundler": "metro"
+      "bundler": "webpack"
     }
   }
 }

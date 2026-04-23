@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Platform, Image, Alert } from 'react-native';
+import { View, StyleSheet, Platform, Image, Alert } from 'react-native-web';
 import { useNavigation } from '@react-navigation/native';
 import { SecurityUtils } from '../utils/security';
 
