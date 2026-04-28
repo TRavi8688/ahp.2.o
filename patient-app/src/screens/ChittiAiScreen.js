@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TextInput,
     TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal
-} from 'react-native-web';
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import axios from 'axios';

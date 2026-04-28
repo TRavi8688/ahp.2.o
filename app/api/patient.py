@@ -26,98 +26,46 @@ async def patient_login_ahp(
     req: schemas.LoginAHPRequest,
     db: AsyncSession = Depends(deps.get_db)
 ):
-    """Compatibility login using Local DB with InsForge Fallback."""
+    """
+    ENTERPRISE SECURE LOGIN: Strict Local SOT.
+    No cloud fallbacks. No split-brain identity.
+    """
     from app.core import security
-    from app.core.insforge_client import insforge
     from app.api.auth import throw_auth_exception
-    from app.core.audit import log_audit_action
-    from app.models.models import User, Patient
-
-    user = None
-    patient = None
+    
     ahp_id = req.ahp_id.upper().strip()
 
-    # 1. Try Local SQLite
-    result_p = await db.execute(select(Patient).where(Patient.ahp_id == ahp_id))
+    # 1. Atomic Search: Local Database is the ONLY Source of Truth
+    result_p = await db.execute(select(models.Patient).where(models.Patient.ahp_id == ahp_id))
     patient = result_p.scalars().first()
-    if patient:
-        result_u = await db.execute(select(User).where(User.id == patient.user_id))
-        user = result_u.scalars().first()
     
-    # 2. Try InsForge Fallback (Cloud)
-    if not user:
-        try:
-            cloud_patient = await insforge.get_one("patients", ahp_id=ahp_id)
-            if cloud_patient:
-                # Direct check against cloud password_hash if available
-                p_hash = cloud_patient.get("password_hash")
-                if p_hash and security.verify_password(req.password, p_hash):
-                     # AUTO-SHADOW: Ensure this cloud user exists in the local SQLite
-                     # We use the local 'id' (integer) for the JWT 'sub' to keep app logic happy
-                     cloud_uuid = str(cloud_patient.get("id"))
-                     
-                     # 1. Try to find local user by cloud_id or email
-                     stmt = select(User).where((User.insforge_id == cloud_uuid) | (User.email == cloud_patient.get("email")))
-                     result_u = await db.execute(stmt)
-                     local_user = result_u.scalars().first()
-                     
-                     if not local_user:
-                         # Create local shadow user
-                         local_user = User(
-                             insforge_id=cloud_uuid,
-                             email=cloud_patient.get("email", f"{ahp_id}@cloud.local"),
-                             hashed_password=p_hash,
-                             role="patient",
-                             first_name=cloud_patient.get("first_name", "Cloud"),
-                             last_name=cloud_patient.get("last_name", "Patient")
-                         )
-                         db.add(local_user)
-                         await db.flush() # Get the local_user.id (Integer)
-                         
-                         # Create local shadow patient
-                         local_patient = Patient(
-                             user_id=local_user.id,
-                             ahp_id=ahp_id,
-                             phone_number=cloud_patient.get("phone_number", ""),
-                             age=cloud_patient.get("age"),
-                             blood_group=cloud_patient.get("blood_group"),
-                             gender=cloud_patient.get("gender")
-                         )
-                         db.add(local_patient)
-                         await db.commit()
-                     else:
-                         # Update existing local user with cloud metadata if needed
-                         if not local_user.insforge_id:
-                             local_user.insforge_id = cloud_uuid
-                             await db.commit()
+    if not patient:
+        await log_audit_action(db, "LOGIN_FAILURE_NOT_FOUND", details={"ahp_id": ahp_id})
+        throw_auth_exception("Invalid Mulajna ID or password")
 
-                     # 2. IMPORTANT: The JWT 'sub' is the LOCAL INTEGER ID
-                     access_token = security.create_access_token(local_user.id, "patient")
-                     refresh_token = security.create_refresh_token(local_user.id, "patient")
-                     return {
-                        "access_token": access_token,
-                        "refresh_token": refresh_token,
-                        "token_type": "bearer",
-                        "ahp_id": ahp_id
-                     }
-        except Exception as e:
-            logger.error(f"InsForge Fallback failed: {e}")
-
-    # Final Verification
+    result_u = await db.execute(select(models.User).where(models.User.id == patient.user_id))
+    user = result_u.scalars().first()
+    
+    # 2. Strict Credential Verification
     if not user or not security.verify_password(req.password, user.hashed_password):
-        await log_audit_action(db, "LOGIN_FAILURE_AHP", resource_type="USER", details={"ahp_id": ahp_id})
+        await log_audit_action(db, "LOGIN_FAILURE_AUTH", user_id=user.id if user else None)
         throw_auth_exception("Invalid Mulajna ID or password")
     
+    # 3. Session Issuance
     access_token = security.create_access_token(user.id, user.role)
     refresh_token = security.create_refresh_token(user.id, user.role)
     
-    await log_audit_action(db, "LOGIN_SUCCESS_AHP", user_id=user.id)
+    await log_audit_action(db, "LOGIN_SUCCESS", user_id=user.id)
+    # Unit of Work: Commit handled by dependency or explicit flush if needed
+    await db.commit() 
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "ahp_id": ahp_id
     }
+# --- STANDARD PATIENT ENDPOINTS ---
 
 # --- STANDARD PATIENT ENDPOINTS ---
 
@@ -130,54 +78,33 @@ async def upload_report(
     request: Request,
     file: UploadFile = File(...),
     current_patient: models.Patient = Depends(deps.get_current_patient),
-    db: AsyncSession = Depends(deps.get_db),
-    ai: AsyncAIService = Depends(get_ai_service)
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    """Securely uploads and asynchronously processes a medical report (C1K Big Pipeline Optimized)."""
+    """Securely uploads and asynchronously processes a medical report (Stateless & Scalable)."""
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid file type")
 
-    import shutil
-    import asyncio
     from arq import create_pool
     from arq.connections import RedisSettings
-    from app.services.s3_service import upload_to_s3_async
-
-    # --- BIG PIPELINE: Global Backpressure (C1K Throttle) ---
-    if not settings.DEMO_MODE:
-        try:
-            redis_bp = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
-            current_depth = await redis_bp.llen("arq:queue")
-            if current_depth > 500: # Increased from 50 for Big Pipeline capacity
-                logger.error(f"PIPELINE_CONGESTION: Queue depth {current_depth} > threshold 500.")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Chitti is analyzing a heavy backlog. Parallel pipelines are full. Please try in 2 mins.",
-                    headers={"Retry-After": "120"}
-                )
-        except HTTPException:
-            raise
-        except Exception as bp_err:
-            logger.warning(f"BACKPRESSURE_BYPASS: Redis check failed ({bp_err}).")
+    from app.services.s3_service import upload_bytes_async
 
     try:
-        # 1. Non-blocking parallel file IO
-        await asyncio.to_thread(os.makedirs, "temp_uploads", exist_ok=True)
+        # 1. Direct Memory Streaming to Cloud Storage (Stateless)
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+             raise HTTPException(status_code=413, detail="File too large")
+             
         safe_filename = f"{uuid.uuid4()}{ext}"
-        temp_path = os.path.join("temp_uploads", safe_filename)
-        
-        # Async-friendly streaming from SpooledTemporaryFile to disk
-        def _save_file():
-            with open(temp_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-        await asyncio.to_thread(_save_file)
-
-        # 2. Async Upload to Cloud Storage (Zero-Blocking)
         s3_object_name = f"reports/{current_patient.ahp_id or 'anon'}/{safe_filename}"
-        s3_url = await upload_to_s3_async(temp_path, s3_object_name)
+        
+        s3_url = await upload_bytes_async(
+            content=content, 
+            object_name=s3_object_name, 
+            mime_type=file.content_type or "application/octet-stream"
+        )
 
-        # 3. Create Placeholder Record
+        # 2. Create Placeholder Record
         new_record = models.MedicalRecord(
             patient_id=current_patient.id,
             type="Document",
@@ -187,9 +114,9 @@ async def upload_report(
             patient_summary="Analysis staged in cloud pipeline."
         )
         db.add(new_record)
-        await db.commit()
+        await db.flush()
 
-        # 4. ENQUEUE TO ARQ WORKER (Parallel Flow)
+        # 3. ENQUEUE TO ARQ WORKER
         job_id = "demo_job_analysis"
         if not settings.DEMO_MODE:
             try:
@@ -200,15 +127,14 @@ async def upload_report(
                 logger.error(f"QUEUE_ERROR: {queue_err}")
                 job_id = "no_queue"
 
-        # Non-blocking cleanup
-        await asyncio.to_thread(os.remove, temp_path)
+        await db.commit()
 
         await log_audit_action(
             db, 
             "REPORT_STAGED_IN_PIPELINE", 
             user_id=current_patient.user_id, 
             resource_type="MEDICAL_RECORD",
-            details={"record_id": new_record.id, "job_id": job_id, "node": os.getenv("HOSTNAME", "node-1")}
+            details={"record_id": new_record.id, "job_id": job_id}
         )
         
         return {
@@ -219,6 +145,8 @@ async def upload_report(
             "url": s3_url
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"PIPELINE_FAILURE: {str(e)}")
         raise HTTPException(status_code=500, detail="Clinical pipeline failure. Incident logged.")

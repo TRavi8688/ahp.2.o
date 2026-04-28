@@ -323,13 +323,14 @@ class AsyncAIService:
         }
         
         if image_bytes:
+            import base64
             content = [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"}}
             ]
         else:
             content = prompt
-
+ 
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": content}],
@@ -338,7 +339,7 @@ class AsyncAIService:
         }
         if force_json:
             payload["force_json"] = True
-
+ 
         client = await self.get_client()
         try:
             resp = await client.post(url, headers=headers, json=payload)
@@ -394,7 +395,7 @@ class AsyncAIService:
             return "CLINICAL SUMMARY: Patient presents with symptoms of a viral infection. Rest is recommended."
 
         if image_bytes:
-            # Vision-capable models for image analysis
+            # Vision-capable models
             providers = [
                 ("insforge", self._call_insforge_ai, "anthropic/claude-sonnet-4.5"),
                 ("insforge", self._call_insforge_ai, "openai/gpt-4o-mini"),
@@ -403,11 +404,10 @@ class AsyncAIService:
                 ("gemini", self._call_gemini, "gemini-1.5-flash")
             ]
         else:
-            # Text-only models — prioritize speed and quality
+            # Text-only models
             providers = [
                 ("insforge", self._call_insforge_ai, "deepseek/deepseek-v3.2"),
                 ("insforge", self._call_insforge_ai, "openai/gpt-4o-mini"),
-                ("insforge", self._call_insforge_ai, "x-ai/grok-4.1-fast"),
                 ("anthropic", self._call_anthropic, "claude-3-5-sonnet-20240620"),
                 ("groq", self._call_groq, "llama-3.3-70b-versatile"),
                 ("gemini", self._call_gemini, "gemini-1.5-flash")
@@ -606,63 +606,53 @@ class AsyncAIService:
         }
 
     async def get_chat_history(self, user_id: str, conversation_id: str, limit: int = 10, db: Optional[AsyncSession] = None) -> List[Dict[str, Any]]:
-        """Retrieve last N messages for context. Uses local DB if available, else InsForge."""
-        # 1. Check Local DB first if session provided
-        if db:
-            from sqlalchemy import select
-            from app.models import models
-            stmt = select(models.Message).where(
-                models.Message.user_id == int(user_id),
-                models.Message.conversation_id == conversation_id
-            ).order_by(models.Message.created_at.asc())
-            result = await db.execute(stmt)
-            records = result.scalars().all()
-            return [{"role": r.role, "content": r.content} for r in records[-limit:]]
-
-        # 2. Check Cache/InsForge (Original Cloud Logic)
-        cache_key = f"chat_history:{conversation_id}"
-        cached_history = await cache.get(cache_key)
-        
-        if cached_history:
-            return cached_history[-limit:]
-
-        try:
-            records = await insforge.get_records("messages", user_id=user_id, conversation_id=conversation_id)
-            records.sort(key=lambda x: x.get("created_at", ""), reverse=False)
-            full_history = [{"role": m["role"], "content": m["content"]} for m in records]
-            await cache.set(cache_key, full_history, expire=300)
-            return full_history[-limit:]
-        except Exception as e:
-            logger.error(f"Failed to fetch chat history: {e}")
+        """
+        Retrieve last N messages for context. 
+        ENTERPRISE ENFORCED: Single SOT (PostgreSQL).
+        """
+        if not db:
+            logger.error("CHAT_HISTORY_MISSING_DB")
             return []
 
-    async def save_chat_message(self, user_id: str, conversation_id: str, role: str, content: str, db: Optional[AsyncSession] = None):
-        """Save a message turn to the database (Local or InsForge)."""
-        try:
-            # 1. Local DB Save
-            if db:
-                from app.models import models
-                msg = models.Message(
-                    user_id=int(user_id),
-                    conversation_id=conversation_id,
-                    role=role,
-                    content=content
-                )
-                db.add(msg)
-                await db.commit()
+        # 1. Local Cache Check
+        cache_key = f"chat_history:{conversation_id}"
+        cached = await cache.get(cache_key)
+        if cached: return cached[-limit:]
 
-            # 2. InsForge Sync (Optional)
-            if os.getenv("DEMO_MODE") != "True":
-                data = {
-                    "conversation_id": conversation_id,
-                    "user_id": user_id,
-                    "role": role,
-                    "content": content
-                }
-                await insforge.create_record("messages", data)
-            
+        # 2. Database Fetch
+        from sqlalchemy import select
+        from app.models import models
+        stmt = select(models.Message).where(
+            models.Message.user_id == int(user_id), 
+            models.Message.conversation_id == conversation_id
+        ).order_by(models.Message.created_at.asc())
+        
+        result = await db.execute(stmt)
+        records = result.scalars().all()
+        history = [{"role": r.role, "content": r.content} for r in records]
+        
+        # 3. Update Cache
+        await cache.set(cache_key, history, expire=600)
+        return history[-limit:]
+
+    async def save_chat_message(self, user_id: str, conversation_id: str, role: str, content: str, db: Optional[AsyncSession] = None):
+        """Atomic persistence to local DB."""
+        if not db:
+            logger.error("SAVE_CHAT_MISSING_DB")
+            return
+
+        try:
+            from app.models import models
+            msg = models.Message(
+                user_id=int(user_id), 
+                conversation_id=conversation_id, 
+                role=role, 
+                content=content
+            )
+            db.add(msg)
+            # Commit is managed by the service-layer or router Unit-of-Work
         except Exception as e:
-            logger.error(f"Failed to save chat message: {e}")
+            logger.error("SAVE_CHAT_FAILURE", error=str(e))
 
     async def get_medical_context(self, user_id: str, db: Optional[AsyncSession] = None) -> str:
         """Fetch a summary of the patient's record for AI awareness."""

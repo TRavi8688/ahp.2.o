@@ -20,19 +20,18 @@ class StringEncryptedType(TypeDecorator):
     cache_ok = True
 
     def _get_aesgcm(self):
-        """Lazy loader for AES-GCM engine to allow app boot without keys."""
+        """Lazy loader for AES-GCM engine with standardized key derivation."""
         if not settings.ENCRYPTION_KEY or len(settings.ENCRYPTION_KEY) < 32:
-             logger.critical("MISSING_ENCRYPTION_KEY: Data operations will fail.")
-             raise ValueError("CRITICAL: ENCRYPTION_KEY not found or too short in environment.")
+             logger.critical("MISSING_ENCRYPTION_KEY: AES-GCM requires a 32-character key.")
+             raise ValueError("CRITICAL: ENCRYPTION_KEY not found or too short (min 32 chars).")
         
         try:
-             key = base64.b64decode(settings.ENCRYPTION_KEY)
-             if len(key) != 32:
-                  key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
+             # Always derive a 32-byte key from the secret for consistency
+             key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
              return AESGCM(key)
         except Exception as e:
-             logger.critical(f"ENCRYPTION_KEY_FORMAT_ERROR: {e}")
-             raise ValueError("CRITICAL: Invalid ENCRYPTION_KEY format.")
+             logger.critical(f"ENCRYPTION_KEY_INIT_ERROR: {e}")
+             raise ValueError(f"CRITICAL: Could not initialize AES-GCM engine: {e}")
 
     def process_bind_param(self, value, dialect):
         if value is None:
@@ -47,6 +46,7 @@ class StringEncryptedType(TypeDecorator):
             return None
         
         # 1. Prepare keys (Primary + Retired)
+        # Standardize key derivation: always use SHA256 of the provided secret for consistency
         primary_key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
         retired_keys = []
         if hasattr(settings, "PREVIOUS_ENCRYPTION_KEYS") and settings.PREVIOUS_ENCRYPTION_KEYS:
@@ -68,10 +68,12 @@ class StringEncryptedType(TypeDecorator):
                     continue
             
             logger.critical("DECRYPTION_FAILURE: No valid key found for data.")
-            return "DECRYPTION_ERROR"
+            raise DecryptionError("Data integrity check failed: No valid encryption key found.")
+        except DecryptionError:
+            raise
         except Exception as e:
             logger.error(f"DECRYPTION_CRASH: {e}")
-            return "DECRYPTION_ERROR"
+            raise DecryptionError(f"Encryption subsystem failure: {str(e)}")
 
 class TextEncryptedType(StringEncryptedType):
     """AES-GCM encryption for SQLAlchemy Text fields (unlimited length)."""

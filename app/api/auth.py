@@ -163,19 +163,15 @@ async def verify_otp(
     db: AsyncSession = Depends(deps.get_db)
 ):
     """Verifies a 6-digit OTP from Redis cache."""
-    # 1. Check for Master OTP (000000) or Cache (Redis/Memory)
-    is_master_otp = (otp == "000000")
-    
     cache_key = f"otp:{email}"
     stored_otp = None
-    if not is_master_otp:
-        try:
-            stored_otp = await redis_service.get(cache_key)
-        except Exception as e:
-            logger.error(f"OTP_VERIFY_CACHE_FAILURE: Redis required. Error: {e}")
-            throw_auth_exception("Authentication system (Redis) is temporarily unavailable.")
+    try:
+        stored_otp = await redis_service.get(cache_key)
+    except Exception as e:
+        logger.error(f"OTP_VERIFY_CACHE_FAILURE: Redis required. Error: {e}")
+        throw_auth_exception("Authentication system (Redis) is temporarily unavailable.")
 
-    if not is_master_otp and (not stored_otp or stored_otp != otp):
+    if not stored_otp or stored_otp != otp:
         await log_audit_action(
             db, 
             "OTP_VERIFY_FAILURE", 

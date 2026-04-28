@@ -5,45 +5,53 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.models import User, Patient, Doctor
 from app.repositories.base import UserRepository, PatientRepository
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def get_db_user(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
-    """Dependency to get the full DB User object from the JWT payload. Supports both Int and UUID."""
-    user_id = current_user.get("sub")
-    repo = UserRepository(User, db)
+    """
+    Standard Enterprise Dependency to retrieve the full User model from JWT.
+    Enforces integer-based primary keys for consistent relational integrity.
+    """
+    user_id_raw = current_user.get("sub")
     
-    # Try local lookup
-    user = None
     try:
-        user = await repo.get(int(user_id) if str(user_id).isdigit() else user_id)
+        user_id = int(user_id_raw)
     except (ValueError, TypeError):
-        # If not an int, it might be a UUID string for cloud users
-        user = await repo.get(user_id)
+        logger.error(f"AUTH_IDENTITY_ERROR: Expected integer sub claim, got {user_id_raw}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid identity claim in token."
+        )
+
+    repo = UserRepository(User, db)
+    user = await repo.get(user_id)
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User account not found.")
     return user
 
 async def get_current_patient(user: User = Depends(get_db_user), db: AsyncSession = Depends(get_db)) -> Patient:
-    """Dependency to gate routes for patients and return the Patient profile."""
+    """Gated dependency for Patient-only routes."""
     if user.role != "patient":
-        raise HTTPException(status_code=403, detail="Patient access required")
+        raise HTTPException(status_code=403, detail="Route requires Patient role.")
     
     repo = PatientRepository(Patient, db)
     patient = await repo.get_by_user_id(user.id)
     if not patient:
-        raise HTTPException(status_code=404, detail="Patient profile not found")
+        raise HTTPException(status_code=404, detail="Patient profile not initialized.")
     return patient
 
 async def get_current_doctor(user: User = Depends(get_db_user), db: AsyncSession = Depends(get_db)) -> Doctor:
-    """Dependency to gate routes for doctors and return the Doctor profile."""
+    """Gated dependency for Doctor-only routes."""
     if user.role != "doctor":
-        raise HTTPException(status_code=403, detail="Doctor access required")
+        raise HTTPException(status_code=403, detail="Route requires Doctor role.")
     
-    # Simple lookup for now, can be refactored to Repo
     stmt = select(Doctor).where(Doctor.user_id == user.id)
     result = await db.execute(stmt)
     doctor = result.scalar_one_or_none()
     
     if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor profile not found")
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
     return doctor

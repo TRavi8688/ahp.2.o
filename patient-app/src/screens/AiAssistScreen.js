@@ -18,7 +18,7 @@ import {
     TouchableOpacity, ActivityIndicator, KeyboardAvoidingView,
     Platform, Modal, ScrollView, Animated, Easing, Alert,
     Image,
-} from 'react-native-web';
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';

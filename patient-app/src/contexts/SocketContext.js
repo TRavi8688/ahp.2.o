@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native-web';
+import { Alert } from 'react-native';
 import { WS_BASE_URL } from '../api';
 
 const SocketContext = createContext();

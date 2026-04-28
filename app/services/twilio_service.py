@@ -1,35 +1,37 @@
 import os
 from twilio.rest import Client
-from dotenv import load_dotenv
+from app.core.config import settings
+from app.core.logging import logger
 
-load_dotenv()
-
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")
-
-def send_sms_otp(phone_number: str, otp: str):
+def send_sms_otp(phone_number: str, otp: str) -> bool:
     """
-    Sends an OTP via Twilio SMS.
-    Expects phone_number in E.164 format (e.g., +919876543210).
+    ENTERPRISE SMS DELIVERY: Strictly production-safe.
+    No hardcoded mock bypasses. No OTP leakage in logs.
     """
-    if not TWILIO_ACCOUNT_SID or TWILIO_ACCOUNT_SID == "your_twilio_sid_here":
-        print(f"[MOCK SMS] Real Twilio credentials not set. OTP for {phone_number}: {otp}")
+    sid = settings.TWILIO_ACCOUNT_SID
+    token = settings.TWILIO_AUTH_TOKEN
+    from_num = settings.TWILIO_FROM_NUMBER
+
+    if not sid or not token or sid == "your_twilio_sid_here":
+        if settings.ENVIRONMENT == "production":
+            logger.critical("TWILIO_CREDENTIALS_MISSING: SMS delivery failed in production.")
+            return False
+        # In dev, we log that it was skipped, but DO NOT log the OTP itself.
+        logger.warning("SMS_SKIPPED: Credentials not configured.", recipient=phone_number)
         return True
 
     try:
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        # Ensure phone number has country code
-        if not phone_number.startswith("+"):
-            phone_number = f"+91{phone_number}"
+        client = Client(sid, token)
+        # Standardize E.164 formatting
+        target = phone_number if phone_number.startswith("+") else f"+91{phone_number}"
             
         message = client.messages.create(
-            body=f"Your AI Health Passport (AHP) verification code is: {otp}. Valid for 10 minutes.",
-            from_=TWILIO_FROM_NUMBER,
-            to=phone_number
+            body=f"Your AHP verification code is: {otp}",
+            from_=from_num,
+            to=target
         )
-        print(f"Twilio message sent: {message.sid}")
+        logger.info("SMS_DISPATCHED", sid=message.sid)
         return True
     except Exception as e:
-        print(f"Twilio Error: {e}")
+        logger.error("SMS_DISPATCH_FAILURE", error=str(e))
         return False

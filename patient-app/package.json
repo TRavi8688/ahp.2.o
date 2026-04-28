@@ -6,7 +6,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web --port 19006"
+    "web": "node start-web.js"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

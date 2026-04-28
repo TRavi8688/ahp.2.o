@@ -1,4 +1,4 @@
-import { Platform } from 'react-native-web';
+import { Platform } from 'react-native';
 
 // --- API CONFIGURATION ---
 // Priority: Env Variable > Local Dev (port 8000) > Production Fallback

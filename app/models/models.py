@@ -44,6 +44,7 @@ class User(Base):
     __tablename__ = "users"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    version_id: Mapped[int] = mapped_column(default=1, nullable=False) # Optimistic Locking
     insforge_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
@@ -56,10 +57,13 @@ class User(Base):
     patient_profile: Mapped["Patient"] = relationship(back_populates="user", uselist=False)
     doctor_profile: Mapped["Doctor"] = relationship(back_populates="user", uselist=False)
 
+    __mapper_args__ = {"version_id_col": version_id}
+
 class Patient(Base):
     __tablename__ = "patients"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     ahp_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     # Encrypt PII Fields
@@ -77,10 +81,13 @@ class Patient(Base):
     allergies: Mapped[List["Allergy"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
     dashboard: Mapped["PatientDashboard"] = relationship(back_populates="patient", uselist=False)
 
+    __mapper_args__ = {"version_id_col": version_id}
+
 class Doctor(Base):
     __tablename__ = "doctors"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     specialty: Mapped[Optional[str]] = mapped_column(String(100))
     license_number: Mapped[str] = mapped_column(String(100), unique=True)
@@ -90,14 +97,19 @@ class Doctor(Base):
     
     user: Mapped["User"] = relationship(back_populates="doctor_profile")
 
+    __mapper_args__ = {"version_id_col": version_id}
+
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
     type: Mapped[str] = mapped_column(String(50)) # 'document', 'scan', etc.
     file_url: Mapped[str] = mapped_column(String(255))
     raw_text: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
+
+    __mapper_args__ = {"version_id_col": version_id}
     ai_extracted: Mapped[Optional[dict]] = mapped_column(JSONB)
     ai_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
     patient_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
@@ -217,15 +229,19 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
-    action: Mapped[str] = mapped_column(String(100)) # e.g., 'view_record', 'download_report'
-    resource_type: Mapped[str] = mapped_column(String(100)) # e.g., 'medical_record', 'patient_profile'
-    resource_id: Mapped[Optional[int]] = mapped_column(index=True)
-    patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.id"), index=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(50))
-    user_agent: Mapped[Optional[str]] = mapped_column(Text)
-    details: Mapped[Optional[dict]] = mapped_column(JSON)
+    action: Mapped[str] = mapped_column(String(100), index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resource_type: Mapped[str] = mapped_column(String(50))
+    resource_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.id"), nullable=True)
+    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    # Immutable Security Fields
+    signature: Mapped[Optional[str]] = mapped_column(String(255)) # HMAC of content
+    prev_hash: Mapped[Optional[str]] = mapped_column(String(255)) # Chain of trust
 
 class DoctorVerificationSession(Base):
     __tablename__ = "doctor_verification_sessions"

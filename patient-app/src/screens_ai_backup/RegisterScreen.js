@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, TextInput,
     TouchableOpacity, ActivityIndicator, Alert,
     KeyboardAvoidingView, Platform, ScrollView, Image
-} from 'react-native-web';
+} from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native-web';
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 /**
