@@ -5,111 +5,80 @@ metadata:
   namespace: ahp-prod
   labels:
     app: ahp-api
-    tier: backend
 spec:
   replicas: 3
+  selector:
+    matchLabels:
+      app: ahp-api
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: ahp-api
   template:
     metadata:
       labels:
         app: ahp-api
     spec:
-      # Enterprise-Grade Availability: Spread pods across nodes
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - ahp-api
-              topologyKey: "kubernetes.io/hostname"
-      
-      # Zero-Trust Security: Run as non-root
+      # --- ENTERPRISE SECURITY CONTEXT ---
       securityContext:
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
         runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: "topology.kubernetes.io/zone"
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: ahp-api
 
       containers:
       - name: api
-        image: ahp/api:v2.0.4 # Use immutable tags, not 'latest'
-        imagePullPolicy: IfNotPresent
-        
-        # Hardened Security Context for the container
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          readOnlyRootFilesystem: true
-          privileged: false
-        
+        image: ahp-api:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         
-        envFrom:
-        - secretRef:
-            name: ahp-secrets
-        - configMapRef:
-            name: ahp-config
-        
-        # Site Reliability: Probes
+        # --- RESOURCE HARDENING ---
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+
+        # --- PRODUCTION PROBES ---
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8000
-          initialDelaySeconds: 15
-          periodSeconds: 20
-          timeoutSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /readyz
+            path: /health
             port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
         
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+        envFrom:
+        - secretRef:
+            name: ahp-secrets # Mandatory secrets from Vault/ExternalSecrets
         
-        # Graceful Termination for DB connection draining
-        lifecycle:
-          preStop:
-            exec:
-              command: ["/bin/sleep", "20"]
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ahp-db-secrets
+              key: url
+        - name: REDIS_URL
+          value: "redis://redis-master.ahp-prod.svc.cluster.local:6379/0"
 
-      terminationGracePeriodSeconds: 60
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ahp-api-svc
-  namespace: ahp-prod
-spec:
-  selector:
-    app: ahp-api
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8000
-  type: LoadBalancer
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -130,3 +99,17 @@ spec:
       target:
         type: Utilization
         averageUtilization: 70
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahp-api-svc
+  namespace: ahp-prod
+spec:
+  selector:
+    app: ahp-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP

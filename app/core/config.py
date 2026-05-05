@@ -1,6 +1,6 @@
 import os
 import logging
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional, Any
 from dotenv import load_dotenv
@@ -9,41 +9,39 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "AHP 2.0"
+    PROJECT_NAME: str = "AHP 2.0 Secure"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str = "production"
+    ENVIRONMENT: str # Mandatory: production, staging, development
     
-    # 1. SECURITY LOCKDOWN: No defaults for critical secrets
-    SECRET_KEY: str
-    ACCESS_TOKEN_SECRET: str
-    REFRESH_TOKEN_SECRET: str
-    ALGORITHM: str = "HS256"
+    # --- 1. ENTERPRISE AUTHENTICATION (RS256) ---
+    # No symmetric secrets allowed for JWT. 
+    # Must be PEM-formatted RSA keys.
+    JWT_PRIVATE_KEY: str
+    JWT_PUBLIC_KEY: str
+    JWT_AUDIENCE: str = "ahp-enterprise-clients"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # 2. DATA INTEGRITY: Strict single DB source
+    # --- 2. DATA INTEGRITY ---
     DATABASE_URL: str
+    REDIS_URL: str
     
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def validate_db_url(cls, v: Any) -> str:
         if not v:
-            raise ValueError("CRITICAL: DATABASE_URL is mandatory for production.")
+            raise ValueError("CRITICAL: DATABASE_URL is mandatory.")
         url = str(v)
-        # Standardize PostgreSQL async scheme
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and "+asyncpg" not in url:
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 
-    # 3. RELIABILITY: Mandatory Redis for Distributed Logic
-    REDIS_URL: str
-    USE_REDIS: bool = True
-    
-    # 4. COMPLIANCE: Infrastructure Hardening
+    # --- 3. INFRASTRUCTURE & COMPLIANCE ---
     ALLOWED_ORIGINS: List[str] = []
+    S3_BUCKET_NAME: str
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -56,24 +54,18 @@ class Settings(BaseSettings):
                 return [i.strip() for i in v.split(",")]
         return v
     
-    # 5. EXTERNAL DISCOVERY: Purged InsForge
-    S3_BUCKET_NAME: str = "ahp-clinical-vault"
+    # --- 4. SECURE COMMUNICATIONS ---
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None
     
-    # 6. AI ENGINE: Multi-Provider (No Cloud Backbone)
+    # --- 5. AI ENGINE (Multi-Provider) ---
     GEMINI_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     SARVAM_KEY: Optional[str] = None
-    DEMO_MODE: bool = False
 
-    # InsForge Integration (optional)
-    INSFORGE_BASE_URL: Optional[str] = None
-    INSFORGE_ANON_KEY: Optional[str] = None
-    
-    # 7. ENCRYPTION: Mandatory AEAD
+    # --- 6. FIELD-LEVEL ENCRYPTION ---
     ENCRYPTION_KEY: str
     PREVIOUS_ENCRYPTION_KEYS: List[str] = []
     
@@ -82,10 +74,6 @@ class Settings(BaseSettings):
         url = self.DATABASE_URL
         if url.startswith("sqlite://"):
             url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
-        elif url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://") and "+asyncpg" not in url:
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 
     model_config = SettingsConfigDict(
@@ -94,15 +82,30 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    def validate_production_readiness(self):
-        """Fail-fast check for production security requirements."""
+    @model_validator(mode="after")
+    def validate_production_lockdown(self) -> "Settings":
+        """Fail-fast check for zero-trust compliance."""
         if self.ENVIRONMENT == "production":
-            if "localhost" in self.DATABASE_URL:
-                raise RuntimeError("PRODUCTION_FAIL: Localhost database detected in production mode.")
-            if self.SECRET_KEY == "debug_key":
-                raise RuntimeError("PRODUCTION_FAIL: Insecure SECRET_KEY used in production.")
-            if not self.REDIS_URL:
-                raise RuntimeError("PRODUCTION_FAIL: Redis is mandatory for enterprise concurrency.")
+            # 1. Database isolation
+            if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
+                raise ValueError("PRODUCTION_FAIL: Loopback database detected.")
+            
+            # 2. Redis isolation
+            if not self.REDIS_URL or "localhost" in self.REDIS_URL:
+                raise ValueError("PRODUCTION_FAIL: Distributed Redis is mandatory.")
+            
+            # 3. Auth Integrity
+            if "-----BEGIN RSA PRIVATE KEY-----" not in self.JWT_PRIVATE_KEY:
+                raise ValueError("PRODUCTION_FAIL: JWT_PRIVATE_KEY must be a valid RSA PEM.")
+            
+            # 4. Storage Integrity
+            if not self.S3_BUCKET_NAME:
+                raise ValueError("PRODUCTION_FAIL: S3_BUCKET_NAME is mandatory.")
+
+            # 5. Twilio Integrity
+            if not all([self.TWILIO_ACCOUNT_SID, self.TWILIO_AUTH_TOKEN, self.TWILIO_FROM_NUMBER]):
+                raise ValueError("PRODUCTION_FAIL: Twilio communications must be configured.")
+        
+        return self
 
 settings = Settings()
-settings.validate_production_readiness()

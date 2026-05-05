@@ -9,8 +9,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# --- ENTERPRISE RS256 AUTHENTICATION ---
+# Hardened against symmetric key leakage.
+# Private key is strictly for signing (backend).
+# Public key is for verification (distributed services).
+
 def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a standardized access token with short expiry."""
+    """Create a standardized access token with short expiry using RS256."""
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -22,12 +27,14 @@ def create_access_token(subject: Union[str, Any], role: str, expires_delta: Opti
         "role": role,
         "type": "access",
         "iss": settings.PROJECT_NAME,
+        "aud": settings.JWT_AUDIENCE,
         "iat": datetime.utcnow()
     }
-    return jwt.encode(to_encode, settings.ACCESS_TOKEN_SECRET, algorithm=settings.ALGORITHM)
+    # Enforce RS256
+    return jwt.encode(to_encode, settings.JWT_PRIVATE_KEY, algorithm="RS256")
 
 def create_refresh_token(subject: Union[str, Any], role: str) -> str:
-    """Create a long-lived refresh token."""
+    """Create a long-lived refresh token using RS256."""
     expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {
         "exp": expire, 
@@ -35,14 +42,13 @@ def create_refresh_token(subject: Union[str, Any], role: str) -> str:
         "role": role, 
         "type": "refresh",
         "iss": settings.PROJECT_NAME,
+        "aud": settings.JWT_AUDIENCE,
         "iat": datetime.utcnow()
     }
-    return jwt.encode(to_encode, settings.REFRESH_TOKEN_SECRET, algorithm=settings.ALGORITHM)
+    return jwt.encode(to_encode, settings.JWT_PRIVATE_KEY, algorithm="RS256")
 
 def _get_hashable_password(password: str) -> bytes:
-    """
-    Pre-hash the password with SHA256 to avoid the 72-byte bcrypt limit.
-    """
+    """Pre-hash for bcrypt compatibility."""
     sha256_hash = hashlib.sha256(password.encode("utf-8")).digest()
     return base64.b64encode(sha256_hash)
 
@@ -61,12 +67,18 @@ def get_password_hash(password: str) -> str:
 
 def decode_token(token: str, token_type: str = "access") -> Optional[dict]:
     """
-    Decodes a token using the appropriate secret based on its designated type.
-    Enforces 'type' claim validation to prevent token substitution attacks.
+    Decodes a token using the Public Key.
+    Enforces 'type' and 'aud' claim validation.
     """
     try:
-        secret = settings.ACCESS_TOKEN_SECRET if token_type == "access" else settings.REFRESH_TOKEN_SECRET
-        payload = jwt.decode(token, secret, algorithms=[settings.ALGORITHM])
+        # ALWAYS use Public Key for decoding
+        payload = jwt.decode(
+            token, 
+            settings.JWT_PUBLIC_KEY, 
+            algorithms=["RS256"],
+            audience=settings.JWT_AUDIENCE,
+            issuer=settings.PROJECT_NAME
+        )
         
         if payload.get("type") != token_type:
             logger.warning(f"TOKEN_SECURITY: Type mismatch. Expected {token_type}, got {payload.get('type')}")
@@ -104,10 +116,7 @@ def require_role(role: str):
     return role_checker
 
 def calculate_content_checksum(content: str) -> str:
-    """
-    Generates a SHA-256 checksum for data integrity verification.
-    Used to detect unauthorized modification of encrypted fields.
-    """
+    """SHA-256 integrity check."""
     if not content:
         return ""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
