@@ -7,7 +7,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Core
 import { SocketProvider } from './src/contexts/SocketContext';
-import { useFonts, Syne_800ExtraBold, Syne_700Bold } from '@expo-google-fonts/syne';
+import { useFonts } from 'expo-font';
+import { Syne_800ExtraBold, Syne_700Bold } from '@expo-google-fonts/syne';
+import { SpaceMono_400Regular } from '@expo-google-fonts/space-mono';
+import { DMSans_400Regular } from '@expo-google-fonts/dm-sans';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -25,7 +28,9 @@ const Stack = createNativeStackNavigator();
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, info) { console.error('[Fatal App Error]', error, info); }
+  componentDidCatch(error, info) { 
+    console.error('[Fatal App Error]', error, info); 
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -46,10 +51,12 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-export default function App() {
+function AppContent() {
   const [fontsLoaded] = useFonts({
     Syne_800ExtraBold,
     Syne_700Bold,
+    SpaceMono_400Regular,
+    DMSans_400Regular,
   });
 
   const [initialRoute, setInitialRoute] = useState(null);
@@ -63,15 +70,19 @@ export default function App() {
         console.log('[App] Token check:', token ? 'Session found' : 'No session');
         setInitialRoute(token ? 'MainTabs' : 'Login');
         
+        // Force ready after a delay even if fonts take too long, to avoid blank screen
         const timer = setTimeout(() => {
+          console.log('[App] Forced boot ready (timeout)');
           setBootReady(true);
-        }, 1500);
+        }, 3000);
 
         if (fontsLoaded) {
+          console.log('[App] Fonts loaded, system ready');
           setBootReady(true);
           clearTimeout(timer);
         }
       } catch (e) {
+        console.error('[App] Boot error:', e);
         setInitialRoute('Login');
         setBootReady(true);
       }
@@ -90,24 +101,30 @@ export default function App() {
   }
 
   return (
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#050810' }}>
+      <SocketProvider>
+        <NavigationContainer>
+          <Stack.Navigator 
+            screenOptions={{ headerShown: false, animation: 'fade' }} 
+            initialRouteName={initialRoute}
+          >
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="EmergencyMode" component={EmergencyScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SocketProvider>
+    </SafeAreaProvider>
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary>
-      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#050810' }}>
-        <SocketProvider>
-          <NavigationContainer>
-            <Stack.Navigator 
-              screenOptions={{ headerShown: false, animation: 'fade' }} 
-              initialRouteName={initialRoute}
-            >
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Register" component={RegisterScreen} />
-              <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-              <Stack.Screen name="MainTabs" component={MainTabs} />
-              <Stack.Screen name="EmergencyMode" component={EmergencyScreen} />
-              <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </SocketProvider>
-      </SafeAreaProvider>
+      <AppContent />
     </ErrorBoundary>
   );
 }

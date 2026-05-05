@@ -1,14 +1,19 @@
 /**
- * start-web.js
- * Runs Webpack dev server DIRECTLY, bypassing Expo's Metro middleware.
- * This fixes the JSON-at-root collision issue where Metro intercepts requests
- * meant for the Webpack dev server.
+ * start-web.js - DEFINITIVE FIX
+ * 
+ * Root cause of "StyleSheet.create is not a function":
+ *   Metro uses transform.engine=hermes for web, which does NOT support
+ *   react-native-web's StyleSheet shim. Webpack correctly aliases
+ *   react-native -> react-native-web before any code runs.
+ *
+ * This script runs Webpack directly, bypassing Metro entirely for web.
  */
 const path = require('path');
 
-// We need to call expo's webpack config function the same way expo does
 process.env.NODE_ENV = 'development';
 process.env.EXPO_WEBPACK_FAST_REFRESH = 'true';
+// Critical: tell Expo webpack config to NOT use Hermes for web
+process.env.EXPO_WEB_WEBPACK_TRANSPILE_WEB = '1';
 
 async function start() {
   const createExpoWebpackConfigAsync = require('@expo/webpack-config');
@@ -26,20 +31,44 @@ async function start() {
   console.log('[start-web] Building Webpack config...');
   const config = await createExpoWebpackConfigAsync(env, {});
 
-  // Ensure react-native-web alias is applied (it should be, but just in case)
+  // ── CRITICAL: Force react-native -> react-native-web BEFORE any module loads ──
   config.resolve = config.resolve || {};
   config.resolve.alias = {
     ...(config.resolve.alias || {}),
+    // This is the key alias that fixes StyleSheet.create
     'react-native$': 'react-native-web',
+    // Also alias sub-paths
+    'react-native/Libraries/Utilities/Platform': 'react-native-web/dist/exports/Platform',
   };
 
-  // Fix for missing node built-ins
+  // Fix for missing node built-ins in browser
   config.resolve.fallback = {
     ...(config.resolve.fallback || {}),
     crypto: false,
     path: false,
     stream: false,
+    fs: false,
+    os: false,
   };
+
+  // ── CRITICAL: Disable Hermes transformer for web ──
+  if (config.module && config.module.rules) {
+    config.module.rules = config.module.rules.map(rule => {
+      if (rule && rule.use && Array.isArray(rule.use)) {
+        rule.use = rule.use.map(loader => {
+          if (loader && loader.loader && loader.loader.includes('babel-loader')) {
+            loader.options = loader.options || {};
+            loader.options.caller = {
+              ...(loader.options.caller || {}),
+              supportsStaticESM: true,
+            };
+          }
+          return loader;
+        });
+      }
+      return rule;
+    });
+  }
 
   const compiler = Webpack(config);
 
@@ -49,21 +78,25 @@ async function start() {
     host: 'localhost',
     open: false,
     hot: true,
+    // Ensure proper MIME types
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
   };
 
   const server = new WebpackDevServer(serverConfig, compiler);
 
   compiler.hooks.done.tap('start-web', (stats) => {
     if (stats.hasErrors()) {
-      console.error('[start-web] ❌ Compilation FAILED:\n', stats.toString('errors-only'));
+      console.error('[start-web] COMPILATION FAILED:\n', stats.toString('errors-only'));
     } else {
-      console.log('\n[start-web] ✅ Compiled successfully!');
-      console.log('[start-web] 👉 Open: http://localhost:19006\n');
+      console.log('\n[start-web] Compiled successfully!');
+      console.log('[start-web] Patient App: http://localhost:19006');
+      console.log('[start-web] Mobile (Expo Go): exp://192.168.0.21:19006\n');
     }
   });
 
   await server.start();
-  console.log('[start-web] Webpack Dev Server running on http://localhost:19006');
 }
 
 start().catch((err) => {

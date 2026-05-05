@@ -32,9 +32,10 @@
       "package": "com.ahp.mulajna"
     },
     "plugins": [
-        "expo-font",
-        "expo-secure-store",
-        "expo-local-authentication"
+      "expo-font",
+      "expo-secure-store",
+      "expo-local-authentication",
+      "@react-native-community/datetimepicker"
     ],
     "web": {
       "bundler": "webpack"

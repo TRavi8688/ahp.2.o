@@ -13,6 +13,11 @@ config.transformer.getTransformOptions = async () => ({
 
 // Impenetrable alias for web to guarantee react-native-web is always used
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'crypto') {
+    return {
+      type: 'empty',
+    };
+  }
   if (platform === 'web' && moduleName === 'react-native') {
     return context.resolveRequest(context, 'react-native-web', platform);
   }

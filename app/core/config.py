@@ -67,11 +67,27 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     SARVAM_KEY: Optional[str] = None
+    DEMO_MODE: bool = False
+
+    # InsForge Integration (optional)
+    INSFORGE_BASE_URL: Optional[str] = None
+    INSFORGE_ANON_KEY: Optional[str] = None
     
     # 7. ENCRYPTION: Mandatory AEAD
     ENCRYPTION_KEY: str
     PREVIOUS_ENCRYPTION_KEYS: List[str] = []
     
+    @property
+    def async_database_url(self) -> str:
+        url = self.DATABASE_URL
+        if url.startswith("sqlite://"):
+            url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+        elif url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
