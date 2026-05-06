@@ -15,7 +15,7 @@ from app.core.logging import logger
 from app.services.dashboard_service import DashboardService
 from app.services.ai_service import get_ai_service, AsyncAIService
 
-from app.services.s3_service import upload_to_s3_async
+from app.services.storage_service import upload_to_gcs_async
 
 router = APIRouter(prefix="/patient", tags=["Patient"])
 
@@ -87,7 +87,7 @@ async def upload_report(
 
     from arq import create_pool
     from arq.connections import RedisSettings
-    from app.services.s3_service import upload_bytes_async
+    from app.services.storage_service import upload_bytes_async
 
     try:
         # 1. Direct Memory Streaming to Cloud Storage (Stateless)

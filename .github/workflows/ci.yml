@@ -1,4 +1,4 @@
-name: AHP 2.0 Production Hardening CI/CD
+name: AHP 2.0 Production Hardening CI/CD (GCP)
 
 on:
   push:
@@ -25,11 +25,9 @@ jobs:
         run: ruff check .
 
       - name: Run Bandit (Security Scan)
-        # B101-B112: Checks for hardcoded secrets and weak crypto
         run: bandit -r app/ -v
 
       - name: Run Safety (Dependency Audit)
-        # Fails if any library in requirements has a known CVE
         run: pip freeze | safety check --stdin
 
   integrity-test:
@@ -47,64 +45,72 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pydantic-settings python-jose[cryptography]
+          pip install pydantic-settings python-jose[cryptography] google-cloud-storage
 
       - name: Run Production Readiness Audit
-        # This executes the fail-fast logic we built for config lockdown
         env:
           ENVIRONMENT: production
-          # We provide dummy keys in a valid format to verify the logic passes correctly
+          GCP_PROJECT_ID: "ahp-enterprise-prod"
+          GCS_BUCKET_NAME: "ahp-medical-vault"
           DATABASE_URL: postgresql://remote-host/db
           REDIS_URL: redis://remote-redis:6379/0
           JWT_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\nValidKeyFormat\n-----END RSA PRIVATE KEY-----"
           JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nValid\n-----END PUBLIC KEY-----"
-          S3_BUCKET_NAME: "test-vault"
           ENCRYPTION_KEY: "a" * 32
         run: python scratch/verify_hardening.py
 
   build-and-push:
-    name: 📦 Build Production Container
+    name: 📦 Build & Push (Artifact Registry)
     needs: integrity-test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: actions/setup-docker-buildx@v2
+      # --- GOOGLE CLOUD AUTHENTICATION ---
+      # Uses Workload Identity Federation (No static keys in GitHub)
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      - name: Build Production Image
-        # Tagging with the git commit SHA for traceability
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: 'Configure Docker for GCP'
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and Push to Artifact Registry
         run: |
-          docker build -t ahp-api:${{ github.sha }} .
-          docker tag ahp-api:${{ github.sha }} ahp-api:latest
+          IMAGE_NAME="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ahp-repo/api-service"
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:latest
 
-      # --- PLACEHOLDER FOR REGISTRY PUSH ---
-      # - name: Login to ECR/DockerHub
-      #   uses: docker/login-action@v2
-      #   with:
-      #     username: ${{ secrets.REGISTRY_USERNAME }}
-      #     password: ${{ secrets.REGISTRY_PASSWORD }}
-      
-      # - name: Push to Registry
-      #   run: docker push ahp-api:latest
-
-  deploy-to-prod:
-    name: 🚀 Production Cutover
+  deploy-to-gke:
+    name: 🚀 GKE Deployment
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       
-      - name: Update K8s Manifests
-        # Google SRE Practice: Atomic update of the image tag in the deployment
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+
+      - name: 'Get GKE Credentials'
+        uses: 'google-github-actions/get-gke-credentials@v1'
+        with:
+          cluster_name: 'ahp-prod-cluster'
+          location: 'us-central1'
+
+      - name: Apply K8s Manifests
         run: |
-          sed -i 's|image: ahp-api:latest|image: ahp-api:${{ github.sha }}|g' k8s/deployment.yaml
-      
-      # - name: Apply to Kubernetes
-      #   uses: azure/k8s-deploy@v1
-      #   with:
-      #     manifests: |
-      #       k8s/deployment.yaml
-      #       k8s/network-policy.yaml
-      #     images: 'ahp-api:${{ github.sha }}'
+          IMAGE_NAME="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ahp-repo/api-service"
+          sed -i "s|image: ahp-api:latest|image: $IMAGE_NAME:${{ github.sha }}|g" k8s/deployment.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/network-policy.yaml

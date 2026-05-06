@@ -523,22 +523,21 @@ class AsyncAIService:
             return sanitize_ai_output(res) if len(res) > 20 else "I'm Chitti! I've analyzed your reports. Please check with your doctor for the next steps."
 
     async def _get_file_bytes(self, source: str) -> bytes:
-        """Helper to get file bytes from either a local path or an S3 object key."""
-        # 1. Check if it's an S3 object key (no slashes, or specific pattern)
+        """Helper to get file bytes from either a local path or GCP Cloud Storage."""
+        # 1. Check if it's a Cloud Storage object key
         if not os.path.isabs(source) and not source.startswith("./") and not source.startswith("../"):
             try:
-                client = await self.get_client()
-                from app.services.s3_service import INSFORGE_URL, INSFORGE_KEY, BUCKET_NAME
-                url = f"{INSFORGE_URL}/api/storage/buckets/{BUCKET_NAME}/objects/{source}"
+                from app.services.storage_service import StorageService
+                storage_service = StorageService()
                 
-                logger.info(f"Fetching from S3: {url}")
-                resp = await client.get(url, headers={"Authorization": f"Bearer {INSFORGE_KEY}"})
-                if resp.status_code == 200:
-                    return resp.content
-                else:
-                    logger.error(f"S3 Retrieval failed: {resp.status_code}")
+                # Fetching bytes directly from GCS bucket
+                blob = storage_service.bucket.blob(source)
+                content = await asyncio.to_thread(blob.download_as_bytes)
+                logger.info(f"GCS_RETRIEVAL_SUCCESS: {source}")
+                return content
             except Exception as e:
-                logger.error(f"Error fetching from S3: {e}")
+                logger.error(f"GCS_RETRIEVAL_FAILURE: {source} | Error: {e}")
+
 
         # 2. Fallback to local file (or if specifically local)
         try:

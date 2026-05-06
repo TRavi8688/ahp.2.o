@@ -9,21 +9,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "AHP 2.0 Secure"
+    PROJECT_NAME: str = "AHP 2.0 Secure (GCP)"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str # Mandatory: production, staging, development
+    ENVIRONMENT: str # production, staging, development
     
     # --- 1. ENTERPRISE AUTHENTICATION (RS256) ---
-    # No symmetric secrets allowed for JWT. 
-    # Must be PEM-formatted RSA keys.
     JWT_PRIVATE_KEY: str
     JWT_PUBLIC_KEY: str
     JWT_AUDIENCE: str = "ahp-enterprise-clients"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # --- 2. DATA INTEGRITY ---
+    # --- 2. GCP CORE INFRASTRUCTURE ---
+    GCP_PROJECT_ID: str
+    GCS_BUCKET_NAME: str
+    
+    # --- 3. DATA INTEGRITY ---
     DATABASE_URL: str
     REDIS_URL: str
     
@@ -39,9 +41,8 @@ class Settings(BaseSettings):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 
-    # --- 3. INFRASTRUCTURE & COMPLIANCE ---
+    # --- 4. INFRASTRUCTURE & COMPLIANCE ---
     ALLOWED_ORIGINS: List[str] = []
-    S3_BUCKET_NAME: str
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -54,18 +55,18 @@ class Settings(BaseSettings):
                 return [i.strip() for i in v.split(",")]
         return v
     
-    # --- 4. SECURE COMMUNICATIONS ---
+    # --- 5. SECURE COMMUNICATIONS ---
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None
     
-    # --- 5. AI ENGINE (Multi-Provider) ---
+    # --- 6. AI ENGINE (Multi-Provider) ---
     GEMINI_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     SARVAM_KEY: Optional[str] = None
 
-    # --- 6. FIELD-LEVEL ENCRYPTION ---
+    # --- 7. FIELD-LEVEL ENCRYPTION ---
     ENCRYPTION_KEY: str
     PREVIOUS_ENCRYPTION_KEYS: List[str] = []
     
@@ -84,27 +85,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_lockdown(self) -> "Settings":
-        """Fail-fast check for zero-trust compliance."""
+        """Fail-fast check for zero-trust compliance on GCP."""
         if self.ENVIRONMENT == "production":
-            # 1. Database isolation
             if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
-                raise ValueError("PRODUCTION_FAIL: Loopback database detected.")
+                raise ValueError("PRODUCTION_FAIL: Cloud SQL must be used in production.")
             
-            # 2. Redis isolation
             if not self.REDIS_URL or "localhost" in self.REDIS_URL:
-                raise ValueError("PRODUCTION_FAIL: Distributed Redis is mandatory.")
+                raise ValueError("PRODUCTION_FAIL: Cloud Memorystore (Redis) is mandatory.")
             
-            # 3. Auth Integrity
-            if "-----BEGIN RSA PRIVATE KEY-----" not in self.JWT_PRIVATE_KEY:
-                raise ValueError("PRODUCTION_FAIL: JWT_PRIVATE_KEY must be a valid RSA PEM.")
+            if not self.GCP_PROJECT_ID:
+                raise ValueError("PRODUCTION_FAIL: GCP_PROJECT_ID is mandatory.")
             
-            # 4. Storage Integrity
-            if not self.S3_BUCKET_NAME:
-                raise ValueError("PRODUCTION_FAIL: S3_BUCKET_NAME is mandatory.")
-
-            # 5. Twilio Integrity
-            if not all([self.TWILIO_ACCOUNT_SID, self.TWILIO_AUTH_TOKEN, self.TWILIO_FROM_NUMBER]):
-                raise ValueError("PRODUCTION_FAIL: Twilio communications must be configured.")
+            if not self.GCS_BUCKET_NAME:
+                raise ValueError("PRODUCTION_FAIL: GCS_BUCKET_NAME is mandatory.")
         
         return self
 
