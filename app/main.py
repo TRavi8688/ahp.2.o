@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
 
+
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -20,13 +21,14 @@ import sentry_sdk
 setup_logging()
 
 # Initialize Sentry for Enterprise Observability
-if os.getenv("SENTRY_DSN"):
+if settings.SENTRY_DSN:
     sentry_sdk.init(
-        dsn=os.getenv("SENTRY_DSN"),
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=0.2 if settings.ENVIRONMENT == "production" else 1.0,
+        profiles_sample_rate=0.1 if settings.ENVIRONMENT == "production" else 1.0,
+        environment=settings.ENVIRONMENT,
     )
-    logger.info("STARTUP: Sentry Observability Enabled.")
+    logger.info(f"STARTUP: Sentry Observability Enabled ({settings.ENVIRONMENT}).")
 
 logger.info("STARTUP: AHP 2.0 API Enterprise Initialization...")
 
@@ -65,8 +67,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID", "X-Idempotency-Key"],
 )
 
 # Idempotency (Must be after RequestID for logging correlation)
@@ -81,22 +83,37 @@ async def startup_event():
 
 @app.get("/healthz", tags=["Infrastructure"])
 async def liveness_probe():
-    """Liveness probe: Checks if the process is alive."""
-    return {"status": "alive"}
+    """Liveness probe: Minimal check if the process is alive."""
+    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/readyz", tags=["Infrastructure"])
-async def readiness_probe(db: AsyncSession = Depends(get_db)):
-    """Readiness probe: Checks if subsystems are ready."""
+async def readiness_probe(request: Request, db: AsyncSession = Depends(get_db)):
+    """Readiness probe: Checks if subsystems are ready. Secure diagnostics."""
+    status_code = 200
+    subsystems = {"db": "up"}
+    
     try:
         await db.execute(text("SELECT 1"))
-        return {"status": "ready"}
     except Exception as e:
         logger.error(f"READINESS_FAILURE: {e}")
-        return JSONResponse(status_code=503, content={"status": "not_ready"})
+        status_code = 503
+        subsystems["db"] = "down"
+
+    response = {
+        "status": "ready" if status_code == 200 else "not_ready",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+    # Secure exposure: Only show subsystems if admin token matches
+    if request.headers.get("X-Admin-Token") == settings.SECRET_KEY:
+        response["subsystems"] = subsystems
+
+    return JSONResponse(status_code=status_code, content=response)
 
 @app.get("/health", tags=["Infrastructure"])
-async def health_check(db: AsyncSession = Depends(get_db)):
-    return await readiness_probe(db)
+async def health_check(request: Request, db: AsyncSession = Depends(get_db)):
+    """Public health check: Alias for readiness but minimal exposure."""
+    return await readiness_probe(request, db)
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -142,4 +159,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         logger.error(f"WS_ERROR: {str(e)}")
         manager.disconnect(user_id, websocket)
 
+# --- STABILITY BRIDGES ---
+# SPAs are now hosted on Vercel/CDN for better scalability
+# Removed StaticFiles mounting and /patient route
+
 logger.info("SYSTEM_READY: AHP 2.0 API is fully initialized.")
+

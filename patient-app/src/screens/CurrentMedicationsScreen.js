@@ -1,3 +1,9 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
+import { API_BASE_URL } from '../api';
 import { SecurityUtils } from '../utils/security';
 import { Theme, GlobalStyles } from '../theme';
 

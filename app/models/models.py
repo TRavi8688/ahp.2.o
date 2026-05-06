@@ -6,6 +6,9 @@ from typing import List, Optional
 import enum
 from app.core.encryption import StringEncryptedType, TextEncryptedType
 
+# Portable JSON type: JSONB on Postgres, JSON on others (SQLite)
+JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
+
 class RoleEnum(str, enum.Enum):
     patient = "patient"
     doctor = "doctor"
@@ -37,6 +40,32 @@ class AccessStatusEnum(str, enum.Enum):
     requested = "requested"
     granted = "granted"
     revoked = "revoked"
+
+class RecordTypeEnum(str, enum.Enum):
+    document = "document"
+    scan = "scan"
+    vitals = "vitals"
+    prescription = "prescription"
+    lab_report = "lab_report"
+
+class AddedByEnum(str, enum.Enum):
+    patient = "patient"
+    doctor = "doctor"
+    ai = "ai"
+    nurse = "nurse"
+    system = "system"
+
+class NotificationTypeEnum(str, enum.Enum):
+    alert = "alert"
+    message = "message"
+    consent_request = "consent_request"
+    consent_granted = "consent_granted"
+    system = "system"
+
+class MessageRoleEnum(str, enum.Enum):
+    user = "user"
+    assistant = "assistant"
+    system = "system"
 class Base(DeclarativeBase):
     pass
 
@@ -105,12 +134,12 @@ class MedicalRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
-    type: Mapped[str] = mapped_column(String(50)) # 'document', 'scan', etc.
+    type: Mapped[RecordTypeEnum] = mapped_column(SQLEnum(RecordTypeEnum), default=RecordTypeEnum.document)
     file_url: Mapped[str] = mapped_column(String(255))
     raw_text: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
 
     __mapper_args__ = {"version_id_col": version_id}
-    ai_extracted: Mapped[Optional[dict]] = mapped_column(JSONB)
+    ai_extracted: Mapped[Optional[dict]] = mapped_column(JSON_TYPE)
     ai_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
     patient_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
     doctor_summary: Mapped[Optional[str]] = mapped_column(TextEncryptedType)
@@ -127,7 +156,7 @@ class Condition(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
     name: Mapped[str] = mapped_column(StringEncryptedType(255))
-    added_by: Mapped[str] = mapped_column(String(50)) # 'patient', 'doctor', 'ai'
+    added_by: Mapped[AddedByEnum] = mapped_column(SQLEnum(AddedByEnum), default=AddedByEnum.patient)
     confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
     hidden_by_patient: Mapped[bool] = mapped_column(default=False)
     source_record_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medical_records.id"))
@@ -143,7 +172,7 @@ class Medication(Base):
     dosage: Mapped[str] = mapped_column(String(100))
     frequency: Mapped[Optional[str]] = mapped_column(String(100))
     active: Mapped[bool] = mapped_column(default=True)
-    added_by: Mapped[str] = mapped_column(String(50))
+    added_by: Mapped[AddedByEnum] = mapped_column(SQLEnum(AddedByEnum), default=AddedByEnum.patient)
     confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
     hidden_by_patient: Mapped[bool] = mapped_column(default=False)
     source_record_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medical_records.id"))
@@ -157,7 +186,7 @@ class Allergy(Base):
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
     allergen: Mapped[str] = mapped_column(String(255))
     severity: Mapped[str] = mapped_column(String(50), default="Moderate")
-    added_by: Mapped[str] = mapped_column(String(50))
+    added_by: Mapped[AddedByEnum] = mapped_column(SQLEnum(AddedByEnum), default=AddedByEnum.patient)
     confirmed_by_patient: Mapped[bool] = mapped_column(default=False)
     hidden_by_patient: Mapped[bool] = mapped_column(default=False)
     
@@ -198,7 +227,7 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.id"))
     doctor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
-    type: Mapped[str] = mapped_column(String(50))
+    type: Mapped[NotificationTypeEnum] = mapped_column(SQLEnum(NotificationTypeEnum), default=NotificationTypeEnum.alert)
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
     read: Mapped[bool] = mapped_column(default=False)
@@ -212,7 +241,7 @@ class AISummary(Base):
     one_page_summary: Mapped[str] = mapped_column(TextEncryptedType)
     patient_summary: Mapped[str] = mapped_column(TextEncryptedType)
     doctor_summary: Mapped[str] = mapped_column(TextEncryptedType)
-    structured_data: Mapped[dict] = mapped_column(JSONB) # Dashboard analytics
+    structured_data: Mapped[dict] = mapped_column(JSON_TYPE) # Dashboard analytics
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 class PatientDashboard(Base):
@@ -220,7 +249,7 @@ class PatientDashboard(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), unique=True)
-    data: Mapped[dict] = mapped_column(JSONB)  # Aggregated dashboard data
+    data: Mapped[dict] = mapped_column(JSON_TYPE)  # Aggregated dashboard data
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     patient: Mapped["Patient"] = relationship(back_populates="dashboard")
@@ -234,7 +263,7 @@ class AuditLog(Base):
     resource_type: Mapped[str] = mapped_column(String(50))
     resource_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     patient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("patients.id"), nullable=True)
-    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    details: Mapped[Optional[dict]] = mapped_column(JSON_TYPE)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))
     user_agent: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -266,7 +295,7 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     conversation_id: Mapped[str] = mapped_column(String(50), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    role: Mapped[str] = mapped_column(String(50)) # 'user' or 'assistant'
+    role: Mapped[MessageRoleEnum] = mapped_column(SQLEnum(MessageRoleEnum), default=MessageRoleEnum.user)
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -288,6 +317,6 @@ class JobFailure(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     job_id: Mapped[str] = mapped_column(String(100), index=True)
     function_name: Mapped[str] = mapped_column(String(100))
-    args: Mapped[Optional[dict]] = mapped_column(JSON)
+    args: Mapped[Optional[dict]] = mapped_column(JSON_TYPE)
     error: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

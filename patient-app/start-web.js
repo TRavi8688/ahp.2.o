@@ -25,7 +25,7 @@ async function start() {
     platform: 'web',
     mode: 'development',
     https: false,
-    port: 19006,
+    port: 3005,
   };
 
   console.log('[start-web] Building Webpack config...');
@@ -74,14 +74,11 @@ async function start() {
 
   const serverConfig = {
     ...config.devServer,
-    port: 19006,
-    host: 'localhost',
+    port: 3005,
+    host: '0.0.0.0',
     open: false,
     hot: true,
-    // Ensure proper MIME types
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
+    historyApiFallback: true,
   };
 
   const server = new WebpackDevServer(serverConfig, compiler);
@@ -91,11 +88,12 @@ async function start() {
       console.error('[start-web] COMPILATION FAILED:\n', stats.toString('errors-only'));
     } else {
       console.log('\n[start-web] Compiled successfully!');
-      console.log('[start-web] Patient App: http://localhost:19006');
-      console.log('[start-web] Mobile (Expo Go): exp://192.168.0.21:19006\n');
+      console.log('[start-web] Patient App: http://localhost:3005');
+      console.log('[start-web] Mobile (Expo Go): exp://192.168.0.21:3005\n');
     }
   });
 
+  console.log('[start-web] Launching Webpack Dev Server...');
   await server.start();
 }
 

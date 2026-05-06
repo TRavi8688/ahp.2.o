@@ -1,44 +1,52 @@
-# ===================================================================
-# AHP 2.0 — Pure API & AI Worker (Unified Engine)
-# Optimized for Three-Lane Highway Architecture
-# ===================================================================
-
-FROM python:3.11-slim-bookworm
+# --- STAGE 1: BUILDER ---
+FROM python:3.11-slim-bookworm as builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=2.3.2 \
-    PYTHONPATH=/app
+    POETRY_VERSION=1.7.1
 
 WORKDIR /app
 
-# Install system dependencies (Heavy dependencies for AI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
-    tesseract-ocr \
-    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install poetry
 RUN pip install --no-cache-dir "poetry==$POETRY_VERSION"
 
-# Copy backend dependencies
-COPY pyproject.toml poetry.lock* README.md* ./
-RUN poetry config virtualenvs.create false && \
-    poetry lock && \
-    poetry install --only main --no-interaction --no-ansi --no-root
+COPY pyproject.toml poetry.lock ./
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 
-# Copy backend source code
-COPY app/ ./app/
+# --- STAGE 2: FINAL ---
+FROM python:3.11-slim-bookworm
 
-# Create necessary directories for health-checks and secure processing
-RUN mkdir -p /app/secure_uploads /app/uploads
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-# Expose the default port (overridden by Railway $PORT)
-EXPOSE 8080
+WORKDIR /app
 
-# Command is provided by railway.toml (api vs worker)
-# Command — uses Railway's $PORT or defaults to 8080
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    tesseract-ocr \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY . .
+
+# Secure non-root user
+RUN adduser --disabled-password --gecos "" appuser && \
+    mkdir -p /app/secure_uploads /app/uploads && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["uvicorn app.main:app --host 0.0.0.0 --port $PORT"]

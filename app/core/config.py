@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str # production, staging, development
+    SENTRY_DSN: Optional[str] = None
     
     # --- 1. ENTERPRISE AUTHENTICATION (RS256) ---
     JWT_PRIVATE_KEY: str
@@ -65,6 +66,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     SARVAM_KEY: Optional[str] = None
+    INSFORGE_BASE_URL: Optional[str] = None
+    INSFORGE_ANON_KEY: Optional[str] = None
+
+    # --- 7. OBSERVABILITY (OpenTelemetry) ---
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4317"
+
 
     # --- 7. FIELD-LEVEL ENCRYPTION ---
     ENCRYPTION_KEY: str

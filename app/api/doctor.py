@@ -46,20 +46,15 @@ async def doctor_token(
         throw_auth_exception("User not found")
 
     if is_otp:
-        # Validate Real OTP
-        from app.api.auth import _memory_otp_get, _otp_memory_store
+        # Validate Real OTP via Redis (Mandatory for Scalability)
         from app.services.redis_service import redis_service
         
         cache_key = f"otp:{username}"
         try:
-            if settings.USE_REDIS:
-                stored_otp = await redis_service.get(cache_key)
-                if not stored_otp:
-                    stored_otp = _memory_otp_get(cache_key)
-            else:
-                stored_otp = _memory_otp_get(cache_key)
-        except Exception:
-            stored_otp = _memory_otp_get(cache_key)
+            stored_otp = await redis_service.get(cache_key)
+        except Exception as e:
+            logger.error(f"OTP_VERIFY_CACHE_FAILURE: Redis required. Error: {e}")
+            throw_auth_exception("Authentication system (Redis) is temporarily unavailable.")
             
         if not stored_otp or stored_otp != password:
             await log_audit_action(db, "LOGIN_FAILURE", resource_type="USER", details={"email": username, "reason": "invalid_otp"})
@@ -67,12 +62,9 @@ async def doctor_token(
             
         # Cleanup
         try:
-            if settings.USE_REDIS:
-                await redis_service.delete(cache_key)
-            else:
-                _otp_memory_store.pop(cache_key, None)
-        except:
-            _otp_memory_store.pop(cache_key, None)
+            await redis_service.delete(cache_key)
+        except Exception as e:
+            logger.warning(f"OTP_CLEANUP_FAILURE: {e}")
     else:
         if not security.verify_password(password, user.hashed_password):
             await log_audit_action(db, "LOGIN_FAILURE", resource_type="USER", details={"email": username})

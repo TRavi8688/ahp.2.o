@@ -1,12 +1,12 @@
 """Seed script to create login credentials for both Patient and Doctor apps."""
 import asyncio
-from app.core.database import engine, AsyncSessionLocal
+from app.core.database import primary_engine, AsyncSessionLocal
 from app.models.models import Base, User, Patient, Doctor
 from app.core.security import get_password_hash
 
 async def seed():
     # 1. Create all tables
-    async with engine.begin() as conn:
+    async with primary_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("Tables created.")
 

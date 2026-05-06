@@ -31,11 +31,13 @@ async def worker_heartbeat():
         try:
             # We don't have direct redis access here easily without re-creating, 
             # but we can check if the AI service (which uses Redis) is healthy.
-            from app.core.cache import cache
-            if await cache.is_healthy():
+            from app.services.redis_service import redis_service
+            # RedisService doesn't have is_healthy, but we can try a ping
+            try:
+                await redis_service.get_client().ping()
                 consecutive_failures = 0
                 logger.info("WORKER_HEARTBEAT: Service is alive and Redis is healthy.")
-            else:
+            except Exception:
                 consecutive_failures += 1
                 logger.warning(f"WORKER_HEALTH_ALERT: Redis connection issues detected ({consecutive_failures}/5).")
         except Exception as e:

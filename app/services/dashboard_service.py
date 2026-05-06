@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any
-from app.core.cache import cache
+from app.services.redis_service import redis_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import PatientDashboard, Patient, MedicalRecord, Condition, Medication, Allergy, AISummary
@@ -26,9 +26,9 @@ class DashboardService:
         
         # 1. Redis Tier
         try:
-            cached = await cache.get(cache_key)
+            cached = await redis_service.get(cache_key)
             if cached:
-                return cached
+                return json.loads(cached)
         except Exception as e:
             logger.error(f"Redis retrieval failed for dashboard {patient_id}: {e}")
 
@@ -41,7 +41,7 @@ class DashboardService:
             if db_dashboard:
                 # Refresh Redis cache asynchronously
                 try:
-                    await cache.set(cache_key, db_dashboard.data, expire=3600)
+                    await redis_service.set(cache_key, json.dumps(db_dashboard.data), expire=3600)
                 except Exception:
                     pass
                 return db_dashboard.data

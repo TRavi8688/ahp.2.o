@@ -42,6 +42,22 @@
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     <script>
+      // FORCED CACHE BUSTER: Staff Engineer level fix for "White Screen" issues
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+            console.log('[Mulajna] ServiceWorker Unregistered');
+          }
+        });
+      }
+      // Clear cache on boot if it's a dev build
+      if (window.location.hostname === 'localhost') {
+        caches.keys().then(function(names) {
+          for (let name of names) caches.delete(name);
+        });
+      }
+
       // Catch ANY boot error and show it
       window.onerror = function(msg, url, line, col, error) {
         var errBox = document.getElementById('error-display');
@@ -55,11 +71,11 @@
   </head>
 
   <body>
-    <div id="fallback-ui">
-      <h1 style="color: #6366F1; letter-spacing: 15px; margin: 0; font-weight: 900;">MULAJNA</h1>
-      <div class="spinner"></div>
-      <div style="color: #94A3B8; letter-spacing: 4px; font-size: 10px;">ESTABLISHING QUANTUM TUNNEL...</div>
-      <div id="error-display" style="display: none; margin-top: 40px; padding: 20px; border: 1px solid #EF4444; color: #EF4444; background: rgba(239, 68, 68, 0.1); max-width: 80%; font-family: monospace;"></div>
+    <div id="fallback-ui" style="background: #6366F1; color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: fixed; top:0; left:0; z-index:99999;">
+      <h1 style="font-size: 50px;">DIAGNOSTIC_MODE_ACTIVE</h1>
+      <p style="font-size: 20px;">If you can see this, the server is ALIVE.</p>
+      <p>Time: <span id="current-time"></span></p>
+      <script>document.getElementById('current-time').innerText = new Date().toLocaleTimeString();</script>
     </div>
 
     <div id="root"></div>

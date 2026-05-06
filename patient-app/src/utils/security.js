@@ -4,8 +4,8 @@
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TOKEN_KEY = 'mulajna_auth_token'; 
-const AHP_ID_KEY = 'mulajna_ahp_id';
+const TOKEN_KEY = 'patient_mulajna_auth_token'; 
+const AHP_ID_KEY = 'patient_mulajna_ahp_id';
 
 export const SecurityUtils = {
     // --- Secure Token Management ---

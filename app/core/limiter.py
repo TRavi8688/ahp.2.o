@@ -27,8 +27,10 @@ async def check_ip_blacklist(ip: str) -> bool:
         is_blocked = await redis_service.get(f"blacklist:{ip}")
         return bool(is_blocked)
     except Exception:
-        # Fail-fast: If security service is down, block traffic
-        return True
+        # Fail-fast: Only block on failure if in PRODUCTION
+        if settings.ENVIRONMENT == "production":
+            return True
+        return False
 
 async def blacklist_ip(ip: str, duration: int = 3600):
     """Automatically blacklists an IP after excessive violations."""

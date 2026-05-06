@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.insforge_client import insforge
-from app.core.cache import cache
+from app.services.redis_service import redis_service
 import pytesseract
 
 def sanitize_ai_output(text: str) -> str:
@@ -79,7 +79,7 @@ class CircuitBreaker:
     async def _get_fails(self) -> int:
         """Fetch failure count with Redis -> Memory fallback."""
         try:
-            val = await cache.get(self.key)
+            val = await redis_service.get(self.key)
             return int(val) if val else self._memory_fails.get(self.provider, 0)
         except Exception:
             return self._memory_fails.get(self.provider, 0)
@@ -92,9 +92,9 @@ class CircuitBreaker:
             probe_key = f"{self.key}:probe"
             try:
                 # If we can set the probe key, we allow ONE request through to test the provider
-                is_probing = await cache.get(probe_key)
+                is_probing = await redis_service.get(probe_key)
                 if not is_probing:
-                    await cache.set(probe_key, "1", expire=15) # Probe lock for 15s
+                    await redis_service.set(probe_key, "1", expire=15) # Probe lock for 15s
                     logger.info(f"CIRCUIT_PROBE: Attempting discovery probe for {self.provider}.")
                     return False 
             except Exception:
@@ -110,7 +110,7 @@ class CircuitBreaker:
         new_val = current + 1
         self._memory_fails[self.provider] = new_val # Always update memory
         try:
-            await cache.set(self.key, str(new_val), expire=self.window)
+            await redis_service.set(self.key, str(new_val), expire=self.window)
         except Exception:
             pass # Redis down, memory is primary
             
@@ -121,7 +121,7 @@ class CircuitBreaker:
         """Reset failure count on success."""
         self._memory_fails[self.provider] = 0
         try:
-            await cache.delete(self.key)
+            await redis_service.delete(self.key)
         except Exception:
             pass
 
@@ -614,8 +614,10 @@ class AsyncAIService:
 
         # 1. Local Cache Check
         cache_key = f"chat_history:{conversation_id}"
-        cached = await cache.get(cache_key)
-        if cached: return cached[-limit:]
+        cached = await redis_service.get(cache_key)
+        if cached:
+            history = json.loads(cached)
+            return history[-limit:]
 
         # 2. Database Fetch
         from sqlalchemy import select
@@ -630,7 +632,7 @@ class AsyncAIService:
         history = [{"role": r.role, "content": r.content} for r in records]
         
         # 3. Update Cache
-        await cache.set(cache_key, history, expire=600)
+        await redis_service.set(cache_key, json.dumps(history), expire=600)
         return history[-limit:]
 
     async def save_chat_message(self, user_id: str, conversation_id: str, role: str, content: str, db: Optional[AsyncSession] = None):

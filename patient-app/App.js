@@ -52,17 +52,29 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
+  const fontsLoaded = true; // Temporary bypass for white-screen debug
+  /*
   const [fontsLoaded] = useFonts({
     Syne_800ExtraBold,
     Syne_700Bold,
     SpaceMono_400Regular,
     DMSans_400Regular,
   });
+  */
 
   const [initialRoute, setInitialRoute] = useState(null);
   const [bootReady, setBootReady] = useState(false);
 
   useEffect(() => {
+    // FORCE DEBUG: If this doesn't show up, JS is not running
+    if (typeof document !== 'undefined') {
+      const debugDiv = document.createElement('div');
+      debugDiv.innerHTML = 'MULAJNA_JS_ACTIVE_PORT_3005';
+      debugDiv.style.cssText = 'position:fixed; top:0; left:0; background:red; color:white; z-index:999999; padding:10px; font-weight:bold;';
+      document.body.appendChild(debugDiv);
+      console.log('[Mulajna] Force Debug Mounted');
+    }
+
     const init = async () => {
       try {
         console.log('[App] Booting system...');
